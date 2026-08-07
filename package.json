@@ -2,8 +2,7 @@
   "name": "@dittowords/text-extract",
   "version": "0.1.0",
   "description": "Deterministic extraction of candidate user-facing strings from a codebase.",
-  "license": "UNLICENSED",
-  "private": true,
+  "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -19,7 +18,8 @@
     "build": "tsc -p tsconfig.build.json",
     "corpus": "yarn build && node testing/corpus.mjs",
     "test": "jest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "yarn test && yarn build"
   },
   "dependencies": {
     "@ast-grep/lang-kotlin": "^0.0.7",
@@ -43,5 +43,18 @@
   },
   "peerDependencies": {
     "zod": "^4.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dittowords/text-extract.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dittowords/text-extract/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }
