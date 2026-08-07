@@ -182,7 +182,7 @@ async function runI18nFileDiscovery(
 // than locale-token filenames: Android `res/values-<qualifier>/`, iOS
 // `<locale>.lproj/`. `.xcstrings` holds every locale in one file, so its
 // locale is stamped per hit by the extractor instead of here.
-function platformLocaleForPath(
+export function platformLocaleForPath(
   languageId: string,
   relPath: string
 ): string | null {
@@ -200,7 +200,7 @@ function labelFor(language: Language, ext: string): string {
   return ext.slice(1) || "unknown";
 }
 
-function looksMinified(source: string): boolean {
+export function looksMinified(source: string): boolean {
   if (source.length < 1024) return false;
   let newlines = 0;
   for (let i = 0; i < source.length; i++) {

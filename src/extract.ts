@@ -11,6 +11,7 @@ import { createHash } from "crypto";
 import type { FileDiscoveryStats } from "./lang/file-discovery";
 import { shouldEmit } from "./rules";
 import { walkCodebase } from "./walk";
+import type { Language } from "./lang/registry";
 
 export interface DittoScanExtractOptions {
   inputPath: string;
@@ -231,6 +232,67 @@ export function makeCandidateId(
     .slice(0, 12);
 }
 
+/**
+ * Extract candidates from ONE already-resolved file. This is the whole
+ * extraction step — run the language extractor, drop what `shouldEmit`
+ * rejects, and build candidates — with no I/O and no repo-level knowledge
+ * beyond the `framework` tokens handed in.
+ *
+ * Both entry points route through here, deliberately: `runExtract` for a whole
+ * directory and `extractFile` for a single file whose language the caller
+ * doesn't know. A second copy of this loop is exactly the drift this package
+ * exists to end.
+ *
+ * Extractor failures propagate; callers decide whether one bad file should
+ * abort the run.
+ */
+export async function extractFromResolvedFile(args: {
+  relPath: string;
+  source: string;
+  language: Language;
+  languageLabel: string;
+  localeKey: string | null;
+  framework: string[];
+}): Promise<DittoScanCandidate[]> {
+  const { relPath, source, language, languageLabel, localeKey, framework } =
+    args;
+  const hits = await language.extractor.extract({
+    source,
+    kind: language.id,
+  });
+
+  const lines = source.split(/\r?\n/);
+  const candidates: DittoScanCandidate[] = [];
+
+  for (const hit of hits) {
+    if (!shouldEmit(hit.value, hit.context)) continue;
+    candidates.push({
+      id: makeCandidateId(
+        relPath,
+        hit.location.line,
+        hit.location.column,
+        hit.value
+      ),
+      value_raw: hit.value,
+      detection_kind: hit.context.parentRole,
+      location: {
+        file: relPath,
+        line: hit.location.line,
+        column: hit.location.column,
+      },
+      language: languageLabel,
+      locale_key: hit.localeKey ?? localeKey,
+      i18n_key: hit.i18nKey ?? null,
+      framework,
+      source_context: buildSourceContext(lines, hit.location.line),
+      context_identifiers: hit.context.identifiers,
+      usage_evidence: null,
+    });
+  }
+
+  return candidates;
+}
+
 export async function runExtract(
   opts: DittoScanExtractOptions
 ): Promise<DittoScanExtractResult> {
@@ -248,50 +310,29 @@ export async function runExtract(
   const candidates: DittoScanCandidate[] = [];
 
   for (const file of files) {
-    const lang = file.language;
-    let hits;
+    let fileCandidates: DittoScanCandidate[];
     try {
-      hits = await lang.extractor.extract({
+      fileCandidates = await extractFromResolvedFile({
+        relPath: file.relPath,
         source: file.source,
-        kind: lang.id,
+        language: file.language,
+        languageLabel: file.languageLabel,
+        localeKey: file.localeKey,
+        framework,
       });
     } catch (e) {
+      // One unparseable file shouldn't cost the whole scan.
       process.stderr.write(
-        `[ptd extract] failed on ${file.relPath} (${lang.id}): ${
+        `[ptd extract] failed on ${file.relPath} (${file.language.id}): ${
           (e as Error).message
         }\n`
       );
       continue;
     }
 
-    const lines = file.source.split(/\r?\n/);
-
-    for (const hit of hits) {
-      if (!shouldEmit(hit.value, hit.context)) continue;
-      const candidate: DittoScanCandidate = {
-        id: makeCandidateId(
-          file.relPath,
-          hit.location.line,
-          hit.location.column,
-          hit.value
-        ),
-        value_raw: hit.value,
-        detection_kind: hit.context.parentRole,
-        location: {
-          file: file.relPath,
-          line: hit.location.line,
-          column: hit.location.column,
-        },
-        language: file.languageLabel,
-        locale_key: hit.localeKey ?? file.localeKey,
-        i18n_key: hit.i18nKey ?? null,
-        framework,
-        source_context: buildSourceContext(lines, hit.location.line),
-        context_identifiers: hit.context.identifiers,
-        usage_evidence: null,
-      };
+    for (const candidate of fileCandidates) {
       candidates.push(candidate);
-      candidatesByKind[hit.context.parentRole]++;
+      candidatesByKind[candidate.detection_kind]++;
     }
   }
 

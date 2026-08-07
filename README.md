@@ -31,11 +31,47 @@ The deterministic accept/reject rules belong here; the LLM does not.
 
 ## Usage
 
+Two entry points, for the two shapes the work comes in.
+
+**A whole directory** — `ditto scan`, or a repo checkout server-side:
+
 ```ts
 import { runExtract } from "@dittowords/text-extract";
 
 const { candidates, summary } = await runExtract({ inputPath: "/path/to/repo" });
 ```
+
+**One file** — a pull request's changed files, where fetching the whole repo to
+extract three files would be absurd. Pure: no filesystem, no network, so a
+caller holding a blob's contents can use it directly.
+
+```ts
+import { extractFile } from "@dittowords/text-extract";
+
+const { candidates, skipped } = await extractFile({
+  relPath: "src/Button.tsx",
+  source: blobContents,
+  framework: ["react", "next"], // carry over from the last full scan; [] is fine
+});
+```
+
+`skipped` is non-null when the file wasn't scanned at all
+(`unsupported_language`, `unconfirmed_i18n_file`, `minified`) — distinct from
+scanning it and finding nothing.
+
+The two agree per file, because they share the language registry, the i18n
+admission predicates, the minified check, and the extraction loop.
+`src/extract-file.test.ts` asserts that directly rather than trusting it: if
+they ever diverge, a PR scan and a full scan would produce different text items
+for identical code.
+
+Two repo-level facts `extractFile` can't see, so the caller owns them:
+
+- **`framework`** — derived from the repo's `package.json` files and native
+  project markers. Carry it from the last full scan.
+- **Path exclusions** — `runExtract` skips vendored/build/test trees while
+  walking. Here the caller picks the paths, so the caller applies the same
+  exclusions. A PR touching `node_modules/**` shouldn't reach `extractFile`.
 
 ## Development
 

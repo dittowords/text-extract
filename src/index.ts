@@ -10,13 +10,30 @@
  * before the move, so switching the CLI over is provably a no-op. The
  * `extractFile` / repo-level split comes next.
  */
+/** Whole-directory extraction — `ditto scan`, and a repo checkout server-side. */
 export {
   runExtract,
+  extractFromResolvedFile,
   makeCandidateId,
   type DittoScanExtractOptions,
   type DittoScanExtractResult,
   type DittoScanExtractSummary,
 } from "./extract";
+
+/**
+ * Single-file extraction — a pull request's changed files. Pure: hand it a path
+ * and its contents. Reaches the same verdict per file as `runExtract`, which
+ * `extract-file.test.ts` asserts directly.
+ */
+export {
+  extractFile,
+  resolveFile,
+  admitsAsI18nFile,
+  type ExtractFileOptions,
+  type ExtractFileResult,
+  type ResolvedFile,
+  type SkipReason,
+} from "./extract-file";
 
 export { shouldEmit } from "./rules";
 
