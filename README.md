@@ -1,7 +1,6 @@
 # @dittowords/text-extract
 
-Finds candidate user-facing strings in a codebase. Pure and deterministic — no
-network, no LLM.
+Finds strings in a codebase that are potentially user-facing.
 
 ## Usage
 
@@ -39,9 +38,8 @@ Both entry points reach the same verdict on the same file.
 
 ### Notes
 
-- Candidate **order isn't stable** between runs, because globby's file iteration
+- Candidate order may not be stable between runs, because globby's file iteration
   order varies. The set is stable; compare accordingly.
-- `value_raw` is a verbatim source slice, so a quoted literal keeps its quotes.
 - `summary.filesFailed` counts files an extractor threw on. They're dropped from
   the results, so a non-zero count means strings are missing.
 
