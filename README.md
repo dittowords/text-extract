@@ -99,10 +99,21 @@ id, location, kind, value preview) and a `.sha256` over the full serialization,
 which catches the one field the digest omits (`source_context`, 7 lines of code
 per candidate — including it made snapshots 19MB).
 
-The corpus itself isn't vendored; these are whole third-party checkouts. Clone
-them as siblings of this repo, or point `CORPUS_DIR` at a directory containing
-them. A repo that isn't present is **skipped and reported**, so a partial corpus
-gives a partial signal rather than a false pass.
+**Snapshots are gitignored, deliberately.** The corpus isn't pinned — these are
+whole third-party checkouts, and `CORPUS_DIR` points at whatever is on disk — so
+a committed snapshot would fail for everyone whose checkout sits at a different
+commit, for reasons unrelated to the code. And the instinctive fix for a red
+corpus check is `--write`, which silently overwrites the baseline. So this is a
+local before/after tool: record, change, compare.
+
+Consequently a run with no snapshots is the normal state on a fresh clone, and
+**comparing nothing exits non-zero** rather than reporting success. Same for a
+repo that isn't on disk: skipped and reported, never silently passed.
+
+To make this CI-enforceable, the corpus would need pinning — a manifest of repo
+URL plus commit SHA, and a fetch step. Worth doing when extraction changes start
+landing regularly; extraction itself only takes a couple of seconds per repo, so
+cloning is the only real cost.
 
 Two things worth knowing about the output:
 

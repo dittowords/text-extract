@@ -82,6 +82,7 @@ async function main() {
 
   let failed = 0;
   let skipped = 0;
+  let compared = 0;
 
   for (const repo of CORPUS) {
     const repoPath = path.join(CORPUS_DIR, repo);
@@ -115,6 +116,8 @@ async function main() {
       continue;
     }
 
+    compared++;
+
     if (expected === digest) {
       if (expectedHash === fullHash) {
         console.log(`✓ ${repo}: ${count} candidates match`);
@@ -144,6 +147,16 @@ async function main() {
   if (skipped) console.log(`\n${skipped} repo(s) skipped — partial coverage.`);
   if (failed) {
     console.log(`\n${failed} repo(s) changed. Intentional? Re-run with --write.`);
+    process.exit(1);
+  }
+  // Comparing nothing is not passing. Snapshots aren't committed (the corpus
+  // isn't pinned, so they wouldn't be reproducible), which means a run with no
+  // snapshots on disk is the DEFAULT state — and reporting that as success is
+  // exactly how a regression walks through.
+  if (!write && compared === 0) {
+    console.log(
+      "\nNothing compared. Record a baseline first: `yarn corpus --write`."
+    );
     process.exit(1);
   }
 }
