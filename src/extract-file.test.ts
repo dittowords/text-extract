@@ -50,9 +50,8 @@ afterAll(async () => {
 });
 
 describe("extractFile", () => {
-  // The load-bearing test. runExtract walks a directory; extractFile takes one
-  // file. If they ever disagree, a PR scan and a full scan produce different
-  // text items for identical code — the exact drift this package exists to end.
+  // The load-bearing test: the two entry points must reach the same verdict on
+  // the same file, or callers get different results for identical code.
   it("produces the same candidates per file as a full runExtract", async () => {
     const { candidates, summary } = await runExtract({ inputPath: dir });
     expect(candidates.length).toBeGreaterThan(0);

@@ -14,7 +14,7 @@ export {
   type DittoScanExtractSummary,
 } from "./extract";
 
-/** Single-file extraction, for a PR's changed files. */
+/** Single-file extraction. */
 export {
   extractFile,
   resolveFile,

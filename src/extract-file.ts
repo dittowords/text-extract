@@ -1,10 +1,10 @@
 /**
- * Pure single-file extraction, for scanning a PR's changed files.
+ * Pure single-file extraction, for when you already hold a file's contents.
  *
  * Agrees with `runExtract` per file by sharing its pieces; `extract-file.test.ts`
- * asserts that. Two repo-level facts the caller must supply, since this can't
- * see them: `framework`, and the path exclusions `runExtract` applies while
- * walking (don't pass it `node_modules/**`).
+ * asserts that. Two repo-level facts the caller must supply, since one file
+ * can't reveal them: `framework`, and the path exclusions `runExtract` applies
+ * while walking (don't pass it `node_modules/**`).
  */
 import path from "path";
 

@@ -329,8 +329,8 @@ export async function runExtract(
         framework,
       });
     } catch (e) {
-      // Reported via the summary, not stderr — the app runs this in a
-      // background job where nothing reads stderr.
+      // Returned in the summary rather than written to stderr, so callers can
+      // surface it however they need.
       filesFailed++;
       if (failures.length < MAX_REPORTED_FAILURES) {
         failures.push({

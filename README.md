@@ -4,9 +4,6 @@ Finds candidate user-facing strings in a codebase. Pure and deterministic — no
 network, no LLM. Deciding whether a candidate *is* user-facing happens
 downstream.
 
-Shared by both ways Ditto scans code: the `ditto scan` CLI, and ditto-app's
-GitHub integration.
-
 ## Usage
 
 **A whole directory:**
@@ -17,7 +14,7 @@ import { runExtract } from "@dittowords/text-extract";
 const { candidates, summary } = await runExtract({ inputPath: "/path/to/repo" });
 ```
 
-**One file** — for a PR's changed files:
+**One file:**
 
 ```ts
 import { extractFile } from "@dittowords/text-extract";
@@ -25,7 +22,7 @@ import { extractFile } from "@dittowords/text-extract";
 const { candidates, skipped } = await extractFile({
   relPath: "src/Button.tsx",
   source: blobContents,
-  framework: ["react", "next"], // from the last full scan; [] is fine
+  framework: ["react", "next"], // optional; [] is fine
 });
 ```
 
@@ -36,7 +33,8 @@ nothing.
 Both entry points share their internals and are asserted to agree per file. But
 `extractFile` needs two things from the caller that one file can't reveal:
 
-- **`framework`** — carry it over from the last full scan.
+- **`framework`** — the tokens `runExtract` derives from `package.json` files
+  and native project markers. Omitting them only costs a classification hint.
 - **Path exclusions** — `runExtract` skips vendored/build/test trees while
   walking. Apply the same exclusions here, so `node_modules/**` never reaches it.
 
@@ -52,9 +50,9 @@ yarn build
 
 | File | What it answers |
 |---|---|
-| `lang/extractors/*.test.ts` | Does this construct classify correctly? Small inputs, exact line and column. The workhorse. |
-| `golden.test.ts` | Is the output right on realistic files? Expectations are hand-written, so green means "still right", not "still the same". |
-| `extract-file.test.ts` | Do `runExtract` and `extractFile` agree? If they drift, a PR scan and a full scan disagree about identical code. |
+| `lang/extractors/*.test.ts` | Does this construct classify correctly? Small inputs, exact line and column. |
+| `golden.test.ts` | Is the output right on realistic files? |
+| `extract-file.test.ts` | Do `runExtract` and `extractFile` agree per file? |
 | `extract-failures.test.ts` | Is a file whose extractor threw reported? It's dropped from results, so an uncounted failure looks like a clean scan. |
 | `extract-performance.test.ts` | Does the regex fallback backtrack catastrophically on dense input? Loose bound — a cliff detector, not a benchmark. |
 
