@@ -1,5 +1,5 @@
 import fs from "fs/promises";
-import { globby } from "globby";
+import { loadGlobby } from "./globby";
 import path from "path";
 
 const DEFAULT_PREVIEW_CHARS = 400;
@@ -68,6 +68,7 @@ export async function runFileDiscoveryTask(
     elapsedMs: 0,
   };
 
+  const globby = await loadGlobby();
   const allPaths = await globby(task.globs, {
     cwd: root,
     gitignore: true,

@@ -1,5 +1,5 @@
 import fs from "fs/promises";
-import { globby } from "globby";
+import { loadGlobby } from "./lang/globby";
 import path from "path";
 
 import {
@@ -98,6 +98,7 @@ export interface WalkResult {
 export async function walkCodebase(rootPath: string): Promise<WalkResult> {
   const resolved = path.resolve(rootPath);
 
+  const globby = await loadGlobby();
   const [paths, i18nFileResult] = await Promise.all([
     globby(["**/*"], {
       cwd: resolved,

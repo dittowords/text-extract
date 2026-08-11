@@ -1,5 +1,5 @@
 import fs from "fs/promises";
-import { globby } from "globby";
+import { loadGlobby } from "./lang/globby";
 import path from "path";
 
 import {
@@ -160,6 +160,7 @@ async function detectFramework(inputPath: string): Promise<string[]> {
   // Downward walk (inputPath/**/package.json). Honors .gitignore and
   // skips the usual large-directory denylist so we don't spelunk through
   // node_modules / build artifacts.
+  const globby = await loadGlobby();
   const nested = await globby(["**/package.json"], {
     cwd: path.resolve(inputPath),
     gitignore: true,
@@ -198,6 +199,7 @@ const IOS_MARKER_RE =
 
 async function detectMobilePlatforms(inputPath: string): Promise<string[]> {
   const tokens = new Set<string>();
+  const globby = await loadGlobby();
   const matches = await globby(
     [
       "**/AndroidManifest.xml",
