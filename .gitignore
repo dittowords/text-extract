@@ -2,9 +2,3 @@ node_modules
 dist
 *.log
 .DS_Store
-
-# Corpus baselines are local-only: the corpus is unpinned (CORPUS_DIR points at
-# whatever checkouts are on disk), so a committed snapshot would fail for
-# everyone else for reasons unrelated to the code. Record your own before a
-# change: `yarn corpus --write`.
-testing/snapshots/

@@ -1,0 +1,13 @@
+{
+  "nav": {
+    "home": "Home",
+    "settings": "Settings"
+  },
+  "billing": {
+    "title": "Billing",
+    "renewal": "Your plan renews on {date}.",
+    "empty": "No invoices yet"
+  },
+  "items_one": "{count} item",
+  "items_other": "{count} items"
+}

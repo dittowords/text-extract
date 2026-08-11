@@ -76,53 +76,65 @@ Two repo-level facts `extractFile` can't see, so the caller owns them:
 ## Development
 
 ```sh
-yarn test         # unit tests — extraction and rules are deterministic
+yarn test         # unit, golden, and robustness tests — see below
 yarn typecheck
 yarn build
-yarn corpus       # corpus regression check (see below)
 ```
 
-## The corpus check
+## How this is tested
 
-Unit tests can't see extraction *quality* regressions: a rule change that
-quietly drops 500 candidates from a real repo passes every assertion. So
-`testing/corpus.mjs` snapshots the candidate set for a list of real repos and
-diffs against it.
+Three layers, each answering a different question.
 
-```sh
-yarn corpus --write   # record snapshots (do this BEFORE a refactor)
-yarn corpus           # compare (must be clean after a change that shouldn't alter output)
-```
+**Unit tests, per extractor** (`src/lang/extractors/*.test.ts`) — "does this
+construct classify correctly?" Small inputs, exact expected line and column.
+This is the workhorse, and it grows with each new extractor.
 
-A snapshot is two files per repo: a readable `.digest` (one line per candidate —
-id, location, kind, value preview) and a `.sha256` over the full serialization,
-which catches the one field the digest omits (`source_context`, 7 lines of code
-per candidate — including it made snapshots 19MB).
+**Golden tests** (`src/golden.test.ts`) — "is the output right on realistic
+files?" Fixtures in `testing/golden/` with the correct answer **decided by hand**
+and written down. Nothing here was recorded from output, which is the whole
+point: a green run means "still right", not "still the same as last time". Each
+case also lists the strings that must *never* be emitted, so the deliberate
+rejects (`className`, `data-testid`, import specifiers, `translatable="false"`)
+are asserted rather than assumed.
 
-**Snapshots are gitignored, deliberately.** The corpus isn't pinned — these are
-whole third-party checkouts, and `CORPUS_DIR` points at whatever is on disk — so
-a committed snapshot would fail for everyone whose checkout sits at a different
-commit, for reasons unrelated to the code. And the instinctive fix for a red
-corpus check is `--write`, which silently overwrites the baseline. So this is a
-local before/after tool: record, change, compare.
+Fixtures are tested under a **realistic `relPath`** that need not match where the
+file sits on disk, because path shape is itself an input: it drives i18n
+admission (`locales/` in the path) and locale detection (`values-es/`,
+`es.lproj/`). One fixture covers several path cases without building fake trees.
 
-Consequently a run with no snapshots is the normal state on a fresh clone, and
-**comparing nothing exits non-zero** rather than reporting success. Same for a
-repo that isn't on disk: skipped and reported, never silently passed.
+When a golden test fails, either extraction regressed or the agreed answer
+changed. Both need a person to look, which is the intent.
 
-To make this CI-enforceable, the corpus would need pinning — a manifest of repo
-URL plus commit SHA, and a fetch step. Worth doing when extraction changes start
-landing regularly; extraction itself only takes a couple of seconds per repo, so
-cloning is the only real cost.
+**Robustness tests** (`src/robustness.test.ts`) — the two failure modes the
+other two layers structurally cannot see:
 
-Two things worth knowing about the output:
+- *Silent data loss.* A file whose extractor throws is dropped and the scan
+  continues. That's right for one bad file, but every string in it goes missing
+  while the scan reports success. `summary.filesFailed` and `summary.failures`
+  make it visible; the test asserts a throwing extractor is counted, that
+  healthy files still come through, and that a clean run reports zero.
+- *Pathological slowness.* The regex fallback extractor handles every language
+  without a dedicated grammar, and a regex over quote- and backslash-dense
+  source is the classic catastrophic-backtracking setup. The failure isn't a
+  wrong answer, it's pinning a CPU until something kills the process — invisible
+  to unit tests on three-line inputs. Synthetic adversarial inputs run under a
+  deliberately loose time bound: a cliff detector, not a benchmark.
 
-- Candidate **order** is not stable between runs — globby's file iteration order
-  varies. The candidate **set** is stable. Snapshots are sorted and compared as
-  sets.
-- `globby` v16 is ESM-only, and `unicorn-magic/node` is only exported under the
-  `import` condition, so requiring it from CJS fails. It works because both
-  consumers bundle with esbuild leaving this package external, and Node ≥22
-  resolves it through `require(esm)`. The corpus harness deliberately runs
-  against the built `dist/` with plain node so it exercises that exact path
-  rather than a transpiler's idea of it.
+Both use synthetic input, so there's no corpus to clone and nothing recorded on
+disk.
+
+### What none of this covers
+
+Whether extraction got *better*. A change that dropped every real string in a
+codebase would pass the robustness layer, and the golden set only knows about
+the files in it. Growing the golden set is how that coverage grows — add a case
+whenever a real repo turns up copy this gets wrong.
+
+### Proving a change inert
+
+Different question, and it comes up during refactors: *did this change output at
+all?* For that, extract before and after and compare as sets — candidate **order
+is not stable** between runs, because globby's file iteration order varies, so
+compare sets and not bytes. That's a throwaway script for the occasion, not a
+standing check; a snapshot of thousands of candidates from an unpinned checkout
+encodes no judgment and goes stale the moment you improve something on purpose.

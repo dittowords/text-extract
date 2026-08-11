@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Banking</string>
+    <string name="welcome_title">Welcome back</string>
+    <string name="transfer_cta">Transfer money</string>
+    <!-- Deliberately excluded: marked as not for translation. -->
+    <string name="api_base_url" translatable="false">https://api.example.com</string>
+    <plurals name="account_count">
+        <item quantity="one">%d account</item>
+        <item quantity="other">%d accounts</item>
+    </plurals>
+</resources>

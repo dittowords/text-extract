@@ -22,6 +22,17 @@ export interface DittoScanExtractResult {
   summary: DittoScanExtractSummary;
 }
 
+export interface DittoScanExtractFailure {
+  file: string;
+  language: string;
+  message: string;
+}
+
+// Cap on the reported detail, not the count. A repo where one grammar breaks
+// on every file would otherwise carry thousands of near-identical entries
+// through the summary and into storage; `filesFailed` stays exact.
+const MAX_REPORTED_FAILURES = 20;
+
 export interface DittoScanExtractSummary {
   filesScanned: number;
   filesByKind: Record<string, number>;
@@ -31,6 +42,14 @@ export interface DittoScanExtractSummary {
   framework: string[];
   elapsedMs: number;
   i18nFileDiscovery: FileDiscoveryStats | null;
+  // Files an extractor threw on. A scan drops these and carries on — which is
+  // the right call for one unparseable file, but it is silent data loss: every
+  // string in that file goes missing while the scan reports success. If a
+  // grammar update starts throwing on, say, every .kt file in a repo, the only
+  // evidence is here. Surface it; don't let a scan look clean when it isn't.
+  filesFailed: number;
+  // The first MAX_REPORTED_FAILURES failures, for diagnosis.
+  failures: DittoScanExtractFailure[];
 }
 
 const CONTEXT_LINES = 3;
@@ -308,6 +327,8 @@ export async function runExtract(
 
   const candidatesByKind = zeroKindCounts();
   const candidates: DittoScanCandidate[] = [];
+  const failures: DittoScanExtractFailure[] = [];
+  let filesFailed = 0;
 
   for (const file of files) {
     let fileCandidates: DittoScanCandidate[];
@@ -321,12 +342,18 @@ export async function runExtract(
         framework,
       });
     } catch (e) {
-      // One unparseable file shouldn't cost the whole scan.
-      process.stderr.write(
-        `[ptd extract] failed on ${file.relPath} (${file.language.id}): ${
-          (e as Error).message
-        }\n`
-      );
+      // One unparseable file shouldn't cost the whole scan — but it must not
+      // vanish either. Reported via the summary rather than stderr: the app
+      // runs this in a background job where nothing reads stderr, and a
+      // library has no business writing there anyway.
+      filesFailed++;
+      if (failures.length < MAX_REPORTED_FAILURES) {
+        failures.push({
+          file: file.relPath,
+          language: file.language.id,
+          message: (e as Error).message,
+        });
+      }
       continue;
     }
 
@@ -347,6 +374,8 @@ export async function runExtract(
       framework,
       elapsedMs: Date.now() - t0,
       i18nFileDiscovery,
+      filesFailed,
+      failures,
     },
   };
 }

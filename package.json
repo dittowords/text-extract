@@ -16,7 +16,6 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "corpus": "yarn build && node testing/corpus.mjs",
     "test": "jest",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "yarn test && yarn build"
