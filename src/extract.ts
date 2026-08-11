@@ -28,9 +28,7 @@ export interface DittoScanExtractFailure {
   message: string;
 }
 
-// Cap on the reported detail, not the count. A repo where one grammar breaks
-// on every file would otherwise carry thousands of near-identical entries
-// through the summary and into storage; `filesFailed` stays exact.
+// Caps the reported detail, not the count — `filesFailed` stays exact.
 const MAX_REPORTED_FAILURES = 20;
 
 export interface DittoScanExtractSummary {
@@ -42,13 +40,9 @@ export interface DittoScanExtractSummary {
   framework: string[];
   elapsedMs: number;
   i18nFileDiscovery: FileDiscoveryStats | null;
-  // Files an extractor threw on. A scan drops these and carries on — which is
-  // the right call for one unparseable file, but it is silent data loss: every
-  // string in that file goes missing while the scan reports success. If a
-  // grammar update starts throwing on, say, every .kt file in a repo, the only
-  // evidence is here. Surface it; don't let a scan look clean when it isn't.
+  // Files an extractor threw on. Dropped from the results, so a non-zero count
+  // means strings are missing from a scan that otherwise looks clean.
   filesFailed: number;
-  // The first MAX_REPORTED_FAILURES failures, for diagnosis.
   failures: DittoScanExtractFailure[];
 }
 
@@ -254,18 +248,9 @@ export function makeCandidateId(
 }
 
 /**
- * Extract candidates from ONE already-resolved file. This is the whole
- * extraction step — run the language extractor, drop what `shouldEmit`
- * rejects, and build candidates — with no I/O and no repo-level knowledge
- * beyond the `framework` tokens handed in.
- *
- * Both entry points route through here, deliberately: `runExtract` for a whole
- * directory and `extractFile` for a single file whose language the caller
- * doesn't know. A second copy of this loop is exactly the drift this package
- * exists to end.
- *
- * Extractor failures propagate; callers decide whether one bad file should
- * abort the run.
+ * The extraction step for one resolved file, no I/O. Both `runExtract` and
+ * `extractFile` route through here so there's only one copy of it. Extractor
+ * failures propagate; the caller decides what a bad file costs.
  */
 export async function extractFromResolvedFile(args: {
   relPath: string;
@@ -344,10 +329,8 @@ export async function runExtract(
         framework,
       });
     } catch (e) {
-      // One unparseable file shouldn't cost the whole scan — but it must not
-      // vanish either. Reported via the summary rather than stderr: the app
-      // runs this in a background job where nothing reads stderr, and a
-      // library has no business writing there anyway.
+      // Reported via the summary, not stderr — the app runs this in a
+      // background job where nothing reads stderr.
       filesFailed++;
       if (failures.length < MAX_REPORTED_FAILURES) {
         failures.push({

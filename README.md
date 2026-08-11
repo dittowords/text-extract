@@ -76,65 +76,46 @@ Two repo-level facts `extractFile` can't see, so the caller owns them:
 ## Development
 
 ```sh
-yarn test         # unit, golden, and robustness tests — see below
+yarn test         # see "How this is tested" below
 yarn typecheck
 yarn build
 ```
 
 ## How this is tested
 
-Three layers, each answering a different question.
+**Unit tests per extractor** (`src/lang/extractors/*.test.ts`) — does this
+construct classify correctly? Small inputs, exact line and column. The workhorse.
 
-**Unit tests, per extractor** (`src/lang/extractors/*.test.ts`) — "does this
-construct classify correctly?" Small inputs, exact expected line and column.
-This is the workhorse, and it grows with each new extractor.
+**Golden tests** (`src/golden.test.ts`) — is the output right on realistic files?
+Fixtures in `testing/golden/`, with expectations decided by hand rather than
+recorded, so a green run means "still right" and not "still the same". Each case
+also lists strings that must *never* be emitted, which pins the deliberate
+rejects. Fixtures are tested under a realistic `relPath` that need not match
+their location on disk, since path shape drives i18n admission and locale
+detection.
 
-**Golden tests** (`src/golden.test.ts`) — "is the output right on realistic
-files?" Fixtures in `testing/golden/` with the correct answer **decided by hand**
-and written down. Nothing here was recorded from output, which is the whole
-point: a green run means "still right", not "still the same as last time". Each
-case also lists the strings that must *never* be emitted, so the deliberate
-rejects (`className`, `data-testid`, import specifiers, `translatable="false"`)
-are asserted rather than assumed.
+**Failure tests** (`src/extract-failures.test.ts`) — a file whose extractor
+throws is dropped so one bad file can't cost a whole scan, which means its
+strings vanish from results that otherwise look clean. `summary.filesFailed`
+and `summary.failures` carry it; these assert the count, that healthy files
+still come through, and that a clean run reports zero.
 
-Fixtures are tested under a **realistic `relPath`** that need not match where the
-file sits on disk, because path shape is itself an input: it drives i18n
-admission (`locales/` in the path) and locale detection (`values-es/`,
-`es.lproj/`). One fixture covers several path cases without building fake trees.
+**Performance tests** (`src/extract-performance.test.ts`) — the regex fallback
+handles every language without a grammar, and a regex over quote/backslash-dense
+source can backtrack catastrophically. The failure is a pinned CPU, not a wrong
+answer, so the bound is loose: a cliff detector, not a benchmark.
 
-When a golden test fails, either extraction regressed or the agreed answer
-changed. Both need a person to look, which is the intent.
+### What this doesn't cover
 
-**Robustness tests** (`src/robustness.test.ts`) — the two failure modes the
-other two layers structurally cannot see:
-
-- *Silent data loss.* A file whose extractor throws is dropped and the scan
-  continues. That's right for one bad file, but every string in it goes missing
-  while the scan reports success. `summary.filesFailed` and `summary.failures`
-  make it visible; the test asserts a throwing extractor is counted, that
-  healthy files still come through, and that a clean run reports zero.
-- *Pathological slowness.* The regex fallback extractor handles every language
-  without a dedicated grammar, and a regex over quote- and backslash-dense
-  source is the classic catastrophic-backtracking setup. The failure isn't a
-  wrong answer, it's pinning a CPU until something kills the process — invisible
-  to unit tests on three-line inputs. Synthetic adversarial inputs run under a
-  deliberately loose time bound: a cliff detector, not a benchmark.
-
-Both use synthetic input, so there's no corpus to clone and nothing recorded on
-disk.
-
-### What none of this covers
-
-Whether extraction got *better*. A change that dropped every real string in a
-codebase would pass the robustness layer, and the golden set only knows about
-the files in it. Growing the golden set is how that coverage grows — add a case
-whenever a real repo turns up copy this gets wrong.
+Whether extraction got *better*. A change that dropped every real string would
+pass everything except the golden set, and the golden set only knows the files
+in it. Add a case whenever a real repo turns up copy this gets wrong.
 
 ### Proving a change inert
 
-Different question, and it comes up during refactors: *did this change output at
-all?* For that, extract before and after and compare as sets — candidate **order
-is not stable** between runs, because globby's file iteration order varies, so
-compare sets and not bytes. That's a throwaway script for the occasion, not a
-standing check; a snapshot of thousands of candidates from an unpinned checkout
-encodes no judgment and goes stale the moment you improve something on purpose.
+A different question that comes up during refactors: did output change at all?
+Extract before and after and compare as **sets** — candidate order isn't stable
+between runs, because globby's file iteration order varies. Worth a throwaway
+script for the occasion, not a standing check: a snapshot of thousands of
+candidates encodes no judgment and goes stale as soon as you improve something
+on purpose.

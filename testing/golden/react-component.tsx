@@ -1,12 +1,5 @@
-// @ts-nocheck — a fixture, not compiled code. It deliberately imports modules
-// that don't exist here ("react", "./Icon") because import specifiers are among
-// the strings golden.test.ts asserts get REJECTED. Without this directive an
-// editor typechecks the file as a standalone program and reports both imports
-// as errors.
-//
-// Happy path for a React/TSX UI file: the shapes that make up most of what a
-// real scan sees. Every string below is either expected copy or a deliberate
-// reject — see golden.test.ts for the agreed answer.
+// @ts-nocheck — a fixture, not compiled code. The unresolvable imports are
+// deliberate: golden.test.ts asserts import specifiers get rejected.
 import { useState } from "react";
 
 import { Icon } from "./Icon";

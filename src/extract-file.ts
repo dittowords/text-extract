@@ -1,26 +1,10 @@
 /**
- * Single-file extraction: given a path and its contents, return candidates.
+ * Pure single-file extraction, for scanning a PR's changed files.
  *
- * This is the entry point for scanning a pull request's changed files, where
- * fetching the whole repo to extract three files would be absurd. It is PURE —
- * no filesystem, no network — so a caller holding a blob's contents can use it
- * directly.
- *
- * It reaches the same verdict per file as `runExtract` does, because it reuses
- * the same pieces: the same language registry, the same per-file i18n
- * admission predicates, the same minified check, and the same extraction loop
- * (`extractFromResolvedFile`). `extract-file.test.ts` asserts the two agree.
- *
- * Two things the caller owns, because they are repo-level facts this function
- * cannot see:
- *
- *  - `framework` — derived from the repo's package.json files and native
- *    project markers. Carry it over from the last full scan; passing `[]` is
- *    valid and only means the classifier loses a hint.
- *  - Path exclusions — `runExtract` skips vendored/build/test trees while
- *    walking, and never hands those paths to extraction. Here the caller
- *    chooses the paths, so the caller must apply the same exclusions. A PR
- *    touching `node_modules/**` should not reach this function.
+ * Agrees with `runExtract` per file by sharing its pieces; `extract-file.test.ts`
+ * asserts that. Two repo-level facts the caller must supply, since this can't
+ * see them: `framework`, and the path exclusions `runExtract` applies while
+ * walking (don't pass it `node_modules/**`).
  */
 import path from "path";
 
@@ -39,12 +23,10 @@ import {
 import { looksMinified, platformLocaleForPath } from "./walk";
 import type { DittoScanCandidate } from "./types";
 
-// `runFileDiscoveryTask` reads this many characters off the head of a file for
-// the heuristic. Matching it matters: admission must not depend on whether the
-// caller had the whole file or a preview.
+// Must match what `runFileDiscoveryTask` reads, or admission would depend on
+// how much of the file the caller had.
 const PREVIEW_CHARS = 400;
 
-/** Why a file produced no candidates — `null` reason means it was scanned. */
 export type SkipReason =
   | "unsupported_language"
   | "unconfirmed_i18n_file"
@@ -63,14 +45,10 @@ export interface ExtractFileResult {
 }
 
 /**
- * The per-file half of the i18n admission heuristic. An i18n-shaped extension
- * (.json, .yaml, …) is only scanned when discovery confirms it actually holds
- * localized copy — otherwise every package.json and tsconfig in the repo would
- * be read as a message catalog.
- *
- * Safe to evaluate per file: the task's three predicates each look at one path
- * and its own head bytes, with no cross-file state. The batch pass in
- * `walkCodebase` only adds the file listing and the stats.
+ * An i18n-shaped extension (.json, .yaml, …) is scanned only if it looks like it
+ * holds localized copy — otherwise every package.json reads as a message catalog.
+ * Safe per file: the task's predicates use one path and its own head bytes, so
+ * the batch pass in `walkCodebase` adds only the listing and stats.
  */
 export function admitsAsI18nFile(relPath: string, source: string): boolean {
   const base = path.basename(relPath);
@@ -79,11 +57,7 @@ export function admitsAsI18nFile(relPath: string, source: string): boolean {
   return I18N_FILES_TASK.heuristicMatch(relPath, source.slice(0, PREVIEW_CHARS));
 }
 
-/**
- * Decide how (or whether) to scan a file. Mirrors `walkCodebase`'s per-file
- * branch: i18n-shaped extensions go through admission, everything else through
- * the language registry.
- */
+/** Mirrors `walkCodebase`'s per-file branch. */
 export function resolveFile(
   relPath: string,
   source: string
@@ -104,8 +78,7 @@ export function resolveFile(
     localeKey = platformLocaleForPath(language.id, relPath);
   }
 
-  // Checked after language resolution so an unsupported file reports the more
-  // specific reason.
+  // After language resolution, so an unsupported file reports that instead.
   if (looksMinified(source)) return "minified";
 
   return {
@@ -117,10 +90,9 @@ export function resolveFile(
 }
 
 export interface ExtractFileOptions {
-  /** Repo-relative POSIX path. Ends up verbatim in `location.file`. */
+  /** Repo-relative POSIX path; used verbatim as `location.file`. */
   relPath: string;
   source: string;
-  /** Repo-level framework tokens; `[]` is valid. See the note above. */
   framework?: string[];
 }
 
