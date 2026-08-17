@@ -168,12 +168,14 @@ function emitAttribute(attr: SgNode, out: ExtractedHit[]): void {
       break;
     }
   }
-  if (valueText === null) return; // Boolean attribute (e.g., `disabled`).
+  // Boolean attribute (e.g., `disabled`). The two branches above set the node
+  // and the text together, so past this point both are present.
+  if (valueNode === undefined || valueText === null) return;
 
-  const start = (valueNode ?? attr).range().start;
+  const start = valueNode.range().start;
   out.push({
     value: valueText,
-    snapshotText: valueNode?.text(),
+    snapshotText: valueNode.text(),
     location: { line: start.line + 1, column: start.column + 1 },
     context: { parentRole: "markup_attr", identifiers: [rawName.toLowerCase()] },
   });
