@@ -55,18 +55,24 @@ export function emitTextHit(
   if (source !== undefined && elementContainsCdata(element, source)) return;
   const inner = innerText(element);
   if (!inner || inner.value.length === 0) return;
-  const { value, line, column } = inner;
+  const { value, raw, line, column } = inner;
   out.push({
     value: transformValue ? transformValue(value) : value,
     location: { line, column },
+    // A span holding a nested element can't be written over without deleting
+    // that element, so it gets no snapshot and stays track-only. Entities and
+    // surrounding whitespace are fine: the span is still one replaceable region.
+    snapshotText: NESTED_TAG_RE.test(raw) ? undefined : raw,
     context: { parentRole: "resource_value", identifiers },
     i18nKey,
   });
 }
 
+const NESTED_TAG_RE = /<[^>]*>/;
+
 // All of an element's inner text, with nested markup (`<xliff:g>`, `<b>`) stripped.
 // Reads the source span: the grammar drops the whitespace next to a nested tag.
-function innerText(element: SgNode): { value: string; line: number; column: number } | null {
+function innerText(element: SgNode): { value: string; raw: string; line: number; column: number } | null {
   const children = element.children();
   const start = children.find((c) => c.kind() === "start_tag");
   const end = children.find((c) => c.kind() === "end_tag");
@@ -74,7 +80,12 @@ function innerText(element: SgNode): { value: string; line: number; column: numb
   const offset = element.range().start.index;
   const raw = element.text().slice(start.range().end.index - offset, end.range().start.index - offset);
   const { line, column } = start.range().end;
-  return { value: decodeXmlEntities(raw.replace(/<[^>]*>/g, "")).trim(), line: line + 1, column: column + 1 };
+  return {
+    value: decodeXmlEntities(raw.replace(/<[^>]*>/g, "")).trim(),
+    raw,
+    line: line + 1,
+    column: column + 1,
+  };
 }
 
 // `&amp;` resolves last, so an escaped entity like `&amp;lt;` stays `&lt;`.

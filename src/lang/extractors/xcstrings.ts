@@ -80,6 +80,7 @@ function emitLocalization(
       out.push({
         value: value.value,
         location: offsetToLineCol(source, value.start),
+        snapshotText: source.slice(value.start, value.end),
         context: { parentRole: "resource_value", identifiers },
         // identifiers[0] is always the catalog key; later segments are
         // variation labels (plural/device/width).

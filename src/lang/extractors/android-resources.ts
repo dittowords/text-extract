@@ -63,6 +63,7 @@ function emitCdataValues(source: string, out: ExtractedHit[]): void {
     out.push({
       value: decodeEscapes(m.value),
       location: { line, column },
+      snapshotText: m.value,
       context: {
         parentRole: "resource_value",
         identifiers: buildItemIdentifiers({ name, quantity, parent }),

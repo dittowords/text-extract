@@ -78,6 +78,7 @@ function emitCdataValues(source: string, out: ExtractedHit[]): void {
     out.push({
       value,
       location: { line, column },
+      snapshotText: value,
       context: { parentRole: "resource_value", identifiers: [name] },
       i18nKey: name || undefined,
     });

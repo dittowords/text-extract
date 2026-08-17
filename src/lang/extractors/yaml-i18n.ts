@@ -32,7 +32,9 @@ const PLURAL_SUFFIX_RE = /^(.+)_(zero|one|two|few|many|other)$/;
 // types pull in more than we need.
 interface YamlScalar {
   value: unknown;
-  range?: [number, number] | null;
+  // [start, value-end, node-end]. value-end stops before trailing comments
+  // and blank lines; node-end includes them.
+  range?: [number, number, number] | null;
 }
 interface YamlPair {
   key?: YamlScalar;
@@ -92,9 +94,15 @@ function walk(node: YamlNode, path: string[], source: string, out: ExtractedHit[
       if (m) identifiers = [...path.slice(0, -1), m[1], m[2]];
     }
     const start = node.range ? node.range[0] : 0;
+    const raw = node.range ? source.slice(start, node.range[1]) : null;
     out.push({
       value: node.value,
       location: offsetToLineCol(source, start),
+      // A span crossing lines is a block scalar or a folded one: the `|`
+      // header and per-line indentation live inside it, so writing the value
+      // back over it would produce invalid YAML. Those stay track-only
+      // pending DIT-13481.
+      snapshotText: raw !== null && !raw.includes("\n") ? raw : undefined,
       context: { parentRole: "resource_value", identifiers },
       // The literal key path — keeps the plural suffix ("item_one") that
       // `identifiers` splits into [base, variant].

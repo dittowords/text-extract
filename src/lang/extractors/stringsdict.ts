@@ -76,6 +76,7 @@ function walkDict(dictEl: SgNode, path: string[], out: ExtractedHit[]): void {
       out.push({
         value,
         location: { line: range.start.line + 1, column: range.start.column + 1 },
+        snapshotText: value,
         context: { parentRole: "resource_value", identifiers: [...path, key] },
         // The top-level dict key is the localization lookup key; deeper
         // segments (format-spec name, plural category) are structure.

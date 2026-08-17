@@ -19,6 +19,7 @@ export const stringsExtractor: LanguageExtractor = {
       out.push({
         value: decodeEscapes(pair.value),
         location: pair.location,
+        snapshotText: pair.snapshotText,
         context: { parentRole: "resource_value", identifiers: [pair.key] },
         i18nKey: pair.key,
       });
@@ -30,6 +31,7 @@ export const stringsExtractor: LanguageExtractor = {
 interface StringPair {
   key: string;
   value: string;
+  snapshotText: string;
   location: { line: number; column: number };
 }
 
@@ -63,6 +65,7 @@ function parseStringsFile(source: string): StringPair[] {
     out.push({
       key: key.content,
       value: value.content,
+      snapshotText: source.slice(value.startIndex, value.endIndex),
       location: offsetToLineCol(source, value.startIndex),
     });
     i = value.endIndex;
