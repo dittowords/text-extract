@@ -304,7 +304,7 @@ export async function extractFromResolvedFile(args: {
         column: hit.location.column,
       },
       occurrence_index: occurrenceIndexes[index],
-      snapshot_text: hit.snapshotText ?? null,
+      snapshot_text: hit.snapshotText,
       language: languageLabel,
       locale_key: hit.localeKey ?? localeKey,
       i18n_key: hit.i18nKey ?? null,

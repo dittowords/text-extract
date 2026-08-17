@@ -59,16 +59,14 @@ export function emitTextHit(
   out.push({
     value: transformValue ? transformValue(value) : value,
     location: { line, column },
-    // A span holding a nested element can't be written over without deleting
-    // that element, so it gets no snapshot and stays track-only. Entities and
-    // surrounding whitespace are fine: the span is still one replaceable region.
-    snapshotText: NESTED_TAG_RE.test(raw) ? undefined : raw,
+    // The contiguous source region the value came from — nested markup
+    // (`<b>`, `<xliff:g>`) and entities included. Whether that region can be
+    // written over is a write-path concern, not an extraction one.
+    snapshotText: raw,
     context: { parentRole: "resource_value", identifiers },
     i18nKey,
   });
 }
-
-const NESTED_TAG_RE = /<[^>]*>/;
 
 // All of an element's inner text, with nested markup (`<xliff:g>`, `<b>`) stripped.
 // Reads the source span: the grammar drops the whitespace next to a nested tag.

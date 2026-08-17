@@ -9,12 +9,14 @@ describe("stringsExtractor (.strings)", () => {
       {
         value: "Hello, world",
         location: { line: 1, column: 14 },
+        snapshotText: `"Hello, world"`,
         context: { parentRole: "resource_value", identifiers: ["greeting"] },
         i18nKey: "greeting",
       },
       {
         value: "Goodbye",
         location: { line: 2, column: 14 },
+        snapshotText: `"Goodbye"`,
         context: { parentRole: "resource_value", identifiers: ["farewell"] },
         i18nKey: "farewell",
       },

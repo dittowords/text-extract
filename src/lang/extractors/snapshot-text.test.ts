@@ -10,6 +10,8 @@ import { htmlMarkupExtractor } from "./html-markup";
 import { javascriptExtractor } from "./javascript";
 import { jsonI18nExtractor } from "./json-i18n";
 import { kotlinExtractor } from "./kotlin";
+import { poExtractor } from "./po";
+import { propertiesExtractor } from "./properties";
 import { resxExtractor } from "./resx";
 import { stringsExtractor } from "./strings";
 import { stringsdictExtractor } from "./stringsdict";
@@ -239,6 +241,38 @@ const cases: {
   item_other: "%{count} items"
 `,
   },
+  {
+    name: "po",
+    extractor: poExtractor,
+    kind: "po",
+    source: `msgid ""
+msgstr "Content-Type: text/plain\\n"
+
+msgid "greeting"
+msgstr "Hello, world"
+
+msgid "wrapped"
+msgstr ""
+"Line one "
+"line two"
+
+msgid "one_item"
+msgid_plural "n_items"
+msgstr[0] "1 item"
+msgstr[1] "%d items"
+`,
+  },
+  {
+    name: "properties",
+    extractor: propertiesExtractor,
+    kind: "properties",
+    source: `# a comment
+greeting = Hello, world
+escaped: Say \\"hi\\" now
+continued = First line \\
+    second line
+`,
+  },
 ];
 
 describe.each(cases)("$name snapshotText", ({ extractor, kind, source }) => {
@@ -295,25 +329,30 @@ describe("snapshotText keeps what the value drops", () => {
   });
 });
 
-describe("no snapshotText when the span isn't a replaceable region", () => {
-  test("XML element wrapping a nested child element", async () => {
+describe("snapshotText spans regions that aren't replaceable as-is", () => {
+  test("XML element wrapping a nested child element keeps the tags", async () => {
     const source = `<resources><string name="x">Hi <b>there</b></string></resources>`;
     const hits = await androidResourceExtractor.extract({ source, kind: "xml" });
 
     expect(hits[0]?.value).toBe("Hi there");
-    expect(hits[0]?.snapshotText).toBeUndefined();
+    expect(hits[0]?.snapshotText).toBe("Hi <b>there</b>");
   });
 
-  test("XLIFF source wrapping a placeholder element", async () => {
+  // `<source>` is a void element in HTML, so the grammar refuses to nest a
+  // child inside it: the tree comes back with no end_tag and `</source>`
+  // demoted to an erroneous_end_tag, which drops the hit before any snapshot
+  // is taken. An XLIFF unit with an inline placeholder therefore yields no
+  // candidate at all today — not a candidate with a missing span.
+  test("XLIFF source wrapping a placeholder element yields no hit at all", async () => {
     const source = `<xliff><file><body><trans-unit id="k">
       <source>Hello <xliff:g id="n">%s</xliff:g></source>
     </trans-unit></body></file></xliff>`;
     const hits = await xliffExtractor.extract({ source, kind: "xml" });
 
-    expect(hits[0]?.snapshotText).toBeUndefined();
+    expect(hits).toEqual([]);
   });
 
-  test("XML entities and surrounding whitespace still get a snapshot", async () => {
+  test("XML entities and surrounding whitespace stay in the span", async () => {
     const source = `<resources><string name="x"> Tom &amp; Jerry </string></resources>`;
     const hits = await androidResourceExtractor.extract({ source, kind: "xml" });
 
@@ -321,13 +360,31 @@ describe("no snapshotText when the span isn't a replaceable region", () => {
     expect(hits[0]?.snapshotText).toBe(" Tom &amp; Jerry ");
   });
 
-  test("YAML block scalar", async () => {
+  test("YAML block scalar spans the header and the indented lines", async () => {
     const source = `en:\n  legal: |\n    First line\n    Second line\n  short: Plain value\n`;
     const hits = await yamlI18nExtractor.extract({ source, kind: "yaml" });
     const block = hits.find((h) => h.i18nKey === "en.legal");
     const plain = hits.find((h) => h.i18nKey === "en.short");
 
-    expect(block?.snapshotText).toBeUndefined();
+    expect(block?.snapshotText).toContain("First line");
+    expect(block?.snapshotText).toContain("    Second line");
+    expect(source).toContain(block?.snapshotText);
     expect(plain?.snapshotText).toBe("Plain value");
+  });
+
+  test("PO multi-chunk string spans the first quote through the last", async () => {
+    const source = ['msgid "greeting"', 'msgstr ""', '"Hello, "', '"world"', ""].join("\n");
+    const hits = await poExtractor.extract({ source, kind: "po" });
+
+    expect(hits[0]?.value).toBe("Hello, world");
+    expect(hits[0]?.snapshotText).toBe('""\n"Hello, "\n"world"');
+  });
+
+  test("properties continuation spans the backslash-continued lines", async () => {
+    const source = ["legal = First line \\", "    second line", ""].join("\n");
+    const hits = await propertiesExtractor.extract({ source, kind: "properties" });
+
+    expect(hits[0]?.value).toBe("First line second line");
+    expect(hits[0]?.snapshotText).toBe("First line \\\n    second line");
   });
 });

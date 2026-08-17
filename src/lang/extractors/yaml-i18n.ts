@@ -98,11 +98,10 @@ function walk(node: YamlNode, path: string[], source: string, out: ExtractedHit[
     out.push({
       value: node.value,
       location: offsetToLineCol(source, start),
-      // A span crossing lines is a block scalar or a folded one: the `|`
-      // header and per-line indentation live inside it, so writing the value
-      // back over it would produce invalid YAML. Those stay track-only
-      // pending DIT-13481.
-      snapshotText: raw !== null && !raw.includes("\n") ? raw : undefined,
+      // The contiguous source region, block-scalar `|` header and per-line
+      // indentation included. Rewriting such a region safely is a write-path
+      // concern (DIT-13481), not a reason to drop the span.
+      snapshotText: raw ?? node.value,
       context: { parentRole: "resource_value", identifiers },
       // The literal key path — keeps the plural suffix ("item_one") that
       // `identifiers` splits into [base, variant].

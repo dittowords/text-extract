@@ -1,4 +1,5 @@
 import type { ExtractedHit, LanguageExtractor } from "../types";
+import { computeLineOffsets } from "./util";
 
 /**
  * Java `.properties` resource bundles (messages_en.properties, labels.properties, …).
@@ -17,6 +18,7 @@ export const propertiesExtractor: LanguageExtractor = {
   async extract({ source }) {
     const out: ExtractedHit[] = [];
     const lines = source.split(/\r?\n/);
+    const lineOffsets = computeLineOffsets(source);
     let i = 0;
     while (i < lines.length) {
       const startIdx = i;
@@ -33,16 +35,24 @@ export const propertiesExtractor: LanguageExtractor = {
         logical = logical.slice(0, -1) + stripLeadingWs(lines[i]);
         i++;
       }
+      const lastIdx = i - 1;
 
       const parsed = splitKeyValue(logical);
       if (!parsed) continue;
-      const { key, value } = parsed;
+      const { key, value, valueStart } = parsed;
       if (value.trim().length === 0) continue;
 
-      const keyColumn = first.length - stripped.length + 1;
+      const indent = first.length - stripped.length;
+      const keyColumn = indent + 1;
+      // The value's contiguous source region: its first character through the
+      // end of the last continued physical line, backslash-newline-indent runs
+      // included.
+      const spanStart =
+        valueStart < stripped.length ? lineOffsets[startIdx] + indent + valueStart : lineOffsets[startIdx] + indent;
       out.push({
         value,
         location: { line: startIdx + 1, column: keyColumn },
+        snapshotText: source.slice(spanStart, lineOffsets[lastIdx] + lines[lastIdx].length),
         context: { parentRole: "resource_value", identifiers: [key] },
         i18nKey: key,
       });
@@ -72,7 +82,7 @@ function endsWithContinuation(line: string): boolean {
 
 // Splits at the first unescaped `=`, `:`, or whitespace. Flanking
 // whitespace and an optional `=`/`:` are dropped per the spec.
-function splitKeyValue(line: string): { key: string; value: string } | null {
+function splitKeyValue(line: string): { key: string; value: string; valueStart: number } | null {
   let i = 0;
   let key = "";
   while (i < line.length) {
@@ -90,5 +100,5 @@ function splitKeyValue(line: string): { key: string; value: string } | null {
   while (i < line.length && (line[i] === " " || line[i] === "\t" || line[i] === "\f")) i++;
   if (i < line.length && (line[i] === "=" || line[i] === ":")) i++;
   while (i < line.length && (line[i] === " " || line[i] === "\t" || line[i] === "\f")) i++;
-  return { key, value: line.slice(i) };
+  return { key, value: line.slice(i), valueStart: i };
 }
