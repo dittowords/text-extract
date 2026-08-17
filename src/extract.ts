@@ -9,6 +9,7 @@ import {
 } from "./types";
 import { createHash } from "crypto";
 import type { FileDiscoveryStats } from "./lang/file-discovery";
+import type { ExtractedHit } from "./lang/types";
 import { shouldEmit } from "./rules";
 import { walkCodebase } from "./walk";
 import type { Language } from "./lang/registry";
@@ -252,6 +253,29 @@ export function makeCandidateId(
  * `extractFile` route through here so there's only one copy of it. Extractor
  * failures propagate; the caller decides what a bad file costs.
  */
+export function assignOccurrenceIndexes(
+  hits: readonly Pick<ExtractedHit, "value" | "location">[]
+): number[] {
+  const sourceOrder = hits
+    .map((_, index) => index)
+    .sort((a, b) => {
+      const left = hits[a].location;
+      const right = hits[b].location;
+      return left.line - right.line || left.column - right.column || a - b;
+    });
+
+  const seen = new Map<string, number>();
+  const indexes = new Array<number>(hits.length);
+
+  for (const index of sourceOrder) {
+    const count = seen.get(hits[index].value) ?? 0;
+    indexes[index] = count;
+    seen.set(hits[index].value, count + 1);
+  }
+
+  return indexes;
+}
+
 export async function extractFromResolvedFile(args: {
   relPath: string;
   source: string;
@@ -270,8 +294,10 @@ export async function extractFromResolvedFile(args: {
   const lines = source.split(/\r?\n/);
   const candidates: DittoScanCandidate[] = [];
 
-  for (const hit of hits) {
-    if (!shouldEmit(hit.value, hit.context)) continue;
+  const emitted = hits.filter((hit) => shouldEmit(hit.value, hit.context));
+  const occurrenceIndexes = assignOccurrenceIndexes(emitted);
+
+  for (const [index, hit] of emitted.entries()) {
     candidates.push({
       id: makeCandidateId(
         relPath,
@@ -286,6 +312,7 @@ export async function extractFromResolvedFile(args: {
         line: hit.location.line,
         column: hit.location.column,
       },
+      occurrence_index: occurrenceIndexes[index],
       language: languageLabel,
       locale_key: hit.localeKey ?? localeKey,
       i18n_key: hit.i18nKey ?? null,
