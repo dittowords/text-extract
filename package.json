@@ -1,6 +1,6 @@
 {
   "name": "@dittowords/text-extract",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Deterministic extraction of candidate user-facing strings from a codebase.",
   "license": "MIT",
   "main": "dist/index.js",
@@ -54,6 +54,6 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   }
 }
