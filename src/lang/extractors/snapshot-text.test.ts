@@ -380,6 +380,14 @@ describe("snapshotText spans regions that aren't replaceable as-is", () => {
     expect(hits[0]?.snapshotText).toBe('""\n"Hello, "\n"world"');
   });
 
+  test("properties span covers only the value when the key is continued too", async () => {
+    const source = "long\\\nkey = Value here\n";
+    const hits = await propertiesExtractor.extract({ source, kind: "properties" });
+
+    expect(hits[0]?.value).toBe("Value here");
+    expect(hits[0]?.snapshotText).toBe("Value here");
+  });
+
   test("properties continuation spans the backslash-continued lines", async () => {
     const source = ["legal = First line \\", "    second line", ""].join("\n");
     const hits = await propertiesExtractor.extract({ source, kind: "properties" });

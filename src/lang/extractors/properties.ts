@@ -29,10 +29,15 @@ export const propertiesExtractor: LanguageExtractor = {
         continue;
       }
 
+      const segments: Segment[] = [{ lineIdx: startIdx, indent: first.length - stripped.length, text: stripped }];
       let logical = stripped;
       i++;
       while (endsWithContinuation(logical) && i < lines.length) {
-        logical = logical.slice(0, -1) + stripLeadingWs(lines[i]);
+        const continued = stripLeadingWs(lines[i]);
+        const last = segments[segments.length - 1];
+        last.text = last.text.slice(0, -1);
+        segments.push({ lineIdx: i, indent: lines[i].length - continued.length, text: continued });
+        logical = logical.slice(0, -1) + continued;
         i++;
       }
       const lastIdx = i - 1;
@@ -42,13 +47,8 @@ export const propertiesExtractor: LanguageExtractor = {
       const { key, value, valueStart } = parsed;
       if (value.trim().length === 0) continue;
 
-      const indent = first.length - stripped.length;
-      const keyColumn = indent + 1;
-      // The value's contiguous source region: its first character through the
-      // end of the last continued physical line, backslash-newline-indent runs
-      // included.
-      const spanStart =
-        valueStart < stripped.length ? lineOffsets[startIdx] + indent + valueStart : lineOffsets[startIdx] + indent;
+      const keyColumn = segments[0].indent + 1;
+      const spanStart = offsetOfLogicalIndex(segments, lineOffsets, valueStart);
       out.push({
         value,
         location: { line: startIdx + 1, column: keyColumn },
@@ -60,6 +60,25 @@ export const propertiesExtractor: LanguageExtractor = {
     return out;
   },
 };
+
+interface Segment {
+  lineIdx: number;
+  indent: number;
+  text: string;
+}
+
+// Maps an index into the assembled logical line back to its absolute offset in
+// the source, so a value whose key was itself continued still spans only the
+// value.
+function offsetOfLogicalIndex(segments: Segment[], lineOffsets: number[], index: number): number {
+  let remaining = index;
+  for (const seg of segments) {
+    if (remaining < seg.text.length) return lineOffsets[seg.lineIdx] + seg.indent + remaining;
+    remaining -= seg.text.length;
+  }
+  const last = segments[segments.length - 1];
+  return lineOffsets[last.lineIdx] + last.indent + last.text.length;
+}
 
 function stripLeadingWs(line: string): string {
   let i = 0;
