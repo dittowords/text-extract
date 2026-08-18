@@ -236,6 +236,15 @@ export function makeCandidateId(file: string, line: number, column: number, valu
   return createHash("sha1").update(`${file}:${line}:${column}:${value}`).digest("hex").slice(0, 12);
 }
 
+/**
+ * Numbers repeats of the same value within one file: 0 for the first
+ * occurrence, 1 for the next, and so on. Returned parallel to `hits`.
+ *
+ * Counting follows source position (line, then column), not the order the
+ * extractor emitted hits in — that order is grouped by node kind and isn't
+ * stable across runs. Paired with the value, this is how a string is
+ * identified without depending on its line number.
+ */
 export function assignOccurrenceIndexes(
   hits: readonly Pick<ExtractedHit, "value" | "location">[],
 ): number[] {
