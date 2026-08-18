@@ -1,6 +1,7 @@
 import { stringsdictExtractor } from "./stringsdict";
 
-const extract = (source: string) => stringsdictExtractor.extract({ source, kind: "ios_stringsdict" });
+const extract = (source: string) =>
+  stringsdictExtractor.extract({ source, kind: "ios_stringsdict" });
 
 const sample = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
@@ -79,7 +80,9 @@ describe("stringsdictExtractor", () => {
   });
 
   test("returns empty for an empty plist", async () => {
-    const hits = await extract(`<?xml version="1.0"?>\n<plist version="1.0"><dict></dict></plist>\n`);
+    const hits = await extract(
+      `<?xml version="1.0"?>\n<plist version="1.0"><dict></dict></plist>\n`,
+    );
     expect(hits).toEqual([]);
   });
 });

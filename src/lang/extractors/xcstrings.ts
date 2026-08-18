@@ -54,7 +54,8 @@ export const xcstringsExtractor: LanguageExtractor = {
 
     for (const entry of strings.entries) {
       const key = entry.key;
-      const localizations = entry.value.kind === "object" ? objectGet(entry.value, "localizations") : null;
+      const localizations =
+        entry.value.kind === "object" ? objectGet(entry.value, "localizations") : null;
       if (!localizations || localizations.kind !== "object") continue;
       for (const locale of localizations.entries) {
         if (locale.value.kind !== "object") continue;
@@ -71,7 +72,7 @@ function emitLocalization(
   identifiers: string[],
   localeKey: string,
   source: string,
-  out: ExtractedHit[]
+  out: ExtractedHit[],
 ): void {
   const stringUnit = objectGet(node, "stringUnit");
   if (stringUnit && stringUnit.kind === "object") {
@@ -96,7 +97,13 @@ function emitLocalization(
       if (variationType.value.kind !== "object") continue;
       for (const variant of variationType.value.entries) {
         if (variant.value.kind !== "object") continue;
-        emitLocalization(variant.value, [...identifiers, variationType.key, variant.key], localeKey, source, out);
+        emitLocalization(
+          variant.value,
+          [...identifiers, variationType.key, variant.key],
+          localeKey,
+          source,
+          out,
+        );
       }
     }
   }

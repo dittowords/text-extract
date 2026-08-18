@@ -1,12 +1,7 @@
 import { z } from "zod";
 
 // The LLM's verdict on a candidate.
-export const DittoScanStatusSchema = z.enum([
-  "user-facing",
-  "not-user-facing",
-  "unsure",
-  "error",
-]);
+export const DittoScanStatusSchema = z.enum(["user-facing", "not-user-facing", "unsure", "error"]);
 export type DittoScanStatus = z.infer<typeof DittoScanStatusSchema>;
 
 // The syntactic site a string was found in. Kinds in the first group are
@@ -26,9 +21,7 @@ export const DittoScanDetectionKindSchema = z.enum([
   "resource_value", // value inside a localization resource file (strings.xml, .strings, .stringsdict, .xcstrings)
   "other", // any other string position — the LLM reads source_context for nuance
 ]);
-export type DittoScanDetectionKind = z.infer<
-  typeof DittoScanDetectionKindSchema
->;
+export type DittoScanDetectionKind = z.infer<typeof DittoScanDetectionKindSchema>;
 
 // Produced by per-language extractors, consumed by `shouldEmit` and the
 // rule classifier. The parts the LLM phase sees are surfaced on Candidate as
@@ -70,9 +63,7 @@ export const DittoScanUsageEvidenceSchema = z.object({
   line: z.number().int().positive(),
   excerpt: z.string(),
 });
-export type DittoScanUsageEvidence = z.infer<
-  typeof DittoScanUsageEvidenceSchema
->;
+export type DittoScanUsageEvidence = z.infer<typeof DittoScanUsageEvidenceSchema>;
 
 // A single string literal found in the source, with some context to help the
 // LLM decide whether it's user-facing.

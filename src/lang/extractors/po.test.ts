@@ -53,7 +53,9 @@ describe("poExtractor", () => {
   });
 
   test("concatenates continuation lines", async () => {
-    const source = [`msgid "Hello, "`, `"world"`, `msgstr "Bonjour, "`, `"le monde"`, ``].join("\n");
+    const source = [`msgid "Hello, "`, `"world"`, `msgstr "Bonjour, "`, `"le monde"`, ``].join(
+      "\n",
+    );
     const hits = await extract(source);
     expect(hits).toHaveLength(1);
     expect(hits[0].value).toBe("Bonjour, le monde");
@@ -88,7 +90,13 @@ describe("poExtractor", () => {
   });
 
   test("ignores PO comments", async () => {
-    const source = [`# translator comment`, `#. extracted`, `msgid "Save"`, `msgstr "Save"`, ``].join("\n");
+    const source = [
+      `# translator comment`,
+      `#. extracted`,
+      `msgid "Save"`,
+      `msgstr "Save"`,
+      ``,
+    ].join("\n");
     const hits = await extract(source);
     expect(hits).toHaveLength(1);
     expect(hits[0].value).toBe("Save");

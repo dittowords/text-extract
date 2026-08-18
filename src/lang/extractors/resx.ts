@@ -58,7 +58,8 @@ function findChildElement(parent: SgNode, name: string): SgNode | null {
 // `name` and to skip typed/binary entries whose CDATA isn't user-facing copy.
 // `[\s\S]*?` between </value> and </data> tolerates sibling children like
 // <comment>.
-const DATA_CDATA_RE = /<data\b([^>]*)>\s*<value\b[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/value>[\s\S]*?<\/data>/g;
+const DATA_CDATA_RE =
+  /<data\b([^>]*)>\s*<value\b[^>]*>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/value>[\s\S]*?<\/data>/g;
 const CDATA_MARKER = "<![CDATA[";
 const NAME_ATTR_RE = /\bname\s*=\s*"([^"]*)"/;
 const TYPE_ATTR_RE = /\btype\s*=\s*"/;
@@ -73,7 +74,8 @@ function emitCdataValues(source: string, out: ExtractedHit[]): void {
     const name = NAME_ATTR_RE.exec(attrs)?.[1] ?? "";
     const matchOffset = m.index ?? 0;
     const cdataPos = m[0].indexOf(CDATA_MARKER);
-    const valueOffset = cdataPos === -1 ? matchOffset : matchOffset + cdataPos + CDATA_MARKER.length;
+    const valueOffset =
+      cdataPos === -1 ? matchOffset : matchOffset + cdataPos + CDATA_MARKER.length;
     const { line, column } = offsetToLineCol(source, valueOffset);
     out.push({
       value,

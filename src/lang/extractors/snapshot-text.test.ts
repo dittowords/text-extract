@@ -3,6 +3,7 @@ import "../registry";
 
 import { Lang } from "@ast-grep/napi";
 
+import type { LanguageExtractor } from "../types";
 import { androidResourceExtractor } from "./android-resources";
 import { arbExtractor } from "./arb";
 import { fallbackExtractor } from "./fallback";
@@ -20,7 +21,6 @@ import { vueExtractor } from "./vue";
 import { xcstringsExtractor } from "./xcstrings";
 import { xliffExtractor } from "./xliff";
 import { yamlI18nExtractor } from "./yaml-i18n";
-import type { LanguageExtractor } from "../types";
 
 const cases: {
   name: string;
@@ -325,12 +325,13 @@ describe.each(cases.filter((c) => XML_FAMILY.includes(c.name)))(
         expect(wellBounded).toBe(true);
       }
     });
-  }
+  },
 );
 
 function allOccurrences(haystack: string, needle: string): number[] {
   const out: number[] = [];
-  for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) out.push(at);
+  for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1))
+    out.push(at);
   return out;
 }
 

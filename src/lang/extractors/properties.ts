@@ -29,7 +29,9 @@ export const propertiesExtractor: LanguageExtractor = {
         continue;
       }
 
-      const segments: Segment[] = [{ lineIdx: startIdx, indent: first.length - stripped.length, text: stripped }];
+      const segments: Segment[] = [
+        { lineIdx: startIdx, indent: first.length - stripped.length, text: stripped },
+      ];
       let logical = stripped;
       i++;
       while (endsWithContinuation(logical) && i < lines.length) {

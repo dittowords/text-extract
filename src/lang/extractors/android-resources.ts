@@ -36,9 +36,17 @@ export const androidResourceExtractor: LanguageExtractor = {
         let index = 0;
         for (const child of el.children()) {
           if (child.kind() !== "element" || tagName(child) !== "item") continue;
-          const variant = tag === "plurals" ? elementAttribute(child, "quantity") ?? "" : String(index);
+          const variant =
+            tag === "plurals" ? elementAttribute(child, "quantity") ?? "" : String(index);
           // The resource name is the lookup key; quantity/index are selectors.
-          emitTextHit(child, [parentName, variant], out, source, parentName || undefined, decodeEscapes);
+          emitTextHit(
+            child,
+            [parentName, variant],
+            out,
+            source,
+            parentName || undefined,
+            decodeEscapes,
+          );
           index++;
         }
       }

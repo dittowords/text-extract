@@ -63,12 +63,15 @@ function isSeq(node: YamlNode): node is YamlSeq {
 function hasPairItems(node: YamlMap): boolean {
   // A YAMLSeq also has `.items`, but its items aren't pair-shaped.
   return (
-    node.items.length === 0 || (node.items[0] !== null && typeof node.items[0] === "object" && "key" in node.items[0])
+    node.items.length === 0 ||
+    (node.items[0] !== null && typeof node.items[0] === "object" && "key" in node.items[0])
   );
 }
 
 function isScalar(node: YamlNode): node is YamlScalar {
-  return !!node && typeof (node as YamlScalar).value !== "undefined" && !("items" in (node as object));
+  return (
+    !!node && typeof (node as YamlScalar).value !== "undefined" && !("items" in (node as object))
+  );
 }
 
 function walk(node: YamlNode, path: string[], source: string, out: ExtractedHit[]): void {

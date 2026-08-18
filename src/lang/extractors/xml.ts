@@ -50,7 +50,7 @@ export function emitTextHit(
   out: ExtractedHit[],
   source?: string,
   i18nKey?: string,
-  transformValue?: (value: string) => string
+  transformValue?: (value: string) => string,
 ): void {
   if (source !== undefined && elementContainsCdata(element, source)) return;
   const inner = innerText(element);
@@ -70,13 +70,17 @@ export function emitTextHit(
 
 // All of an element's inner text, with nested markup (`<xliff:g>`, `<b>`) stripped.
 // Reads the source span: the grammar drops the whitespace next to a nested tag.
-export function innerText(element: SgNode): { value: string; raw: string; line: number; column: number } | null {
+export function innerText(
+  element: SgNode,
+): { value: string; raw: string; line: number; column: number } | null {
   const children = element.children();
   const start = children.find((c) => c.kind() === "start_tag");
   const end = children.find((c) => c.kind() === "end_tag");
   if (!start || !end) return null;
   const offset = element.range().start.index;
-  const raw = element.text().slice(start.range().end.index - offset, end.range().start.index - offset);
+  const raw = element
+    .text()
+    .slice(start.range().end.index - offset, end.range().start.index - offset);
   const { line, column } = start.range().end;
   return {
     value: decodeXmlEntities(raw.replace(/<[^>]*>/g, "")).trim(),

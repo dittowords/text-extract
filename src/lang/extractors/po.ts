@@ -138,7 +138,10 @@ function emit(entry: PoEntry, out: ExtractedHit[]): void {
         value: chunk.value,
         location: { line: chunk.line, column: 1 },
         snapshotText: chunk.snapshot,
-        context: { parentRole: "resource_value", identifiers: [...ctxtIds, msgid.value, `plural:${idx}`] },
+        context: {
+          parentRole: "resource_value",
+          identifiers: [...ctxtIds, msgid.value, `plural:${idx}`],
+        },
         // msgid is gettext's lookup key; msgctxt stays in identifiers only.
         i18nKey: msgid.value,
       });
@@ -170,7 +173,7 @@ function quotedSpan(
   lines: string[],
   lineOffsets: number[],
   firstIdx: number,
-  lastIdx: number
+  lastIdx: number,
 ): string {
   const openQuote = lines[firstIdx].indexOf('"');
   const closeQuote = lines[lastIdx].lastIndexOf('"');
