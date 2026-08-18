@@ -136,7 +136,7 @@ function emit(entry: PoEntry, out: ExtractedHit[]): void {
       if (chunk === null) continue;
       out.push({
         value: chunk.value,
-        location: { line: source.line, column: 1 },
+        location: { line: chunk.line, column: 1 },
         snapshotText: chunk.snapshot,
         context: { parentRole: "resource_value", identifiers: [...ctxtIds, msgid.value, `plural:${idx}`] },
         // msgid is gettext's lookup key; msgctxt stays in identifiers only.
@@ -150,7 +150,7 @@ function emit(entry: PoEntry, out: ExtractedHit[]): void {
   if (chunk === null) return;
   out.push({
     value: chunk.value,
-    location: { line: msgid.line, column: 1 },
+    location: { line: chunk.line, column: 1 },
     snapshotText: chunk.snapshot,
     context: { parentRole: "resource_value", identifiers: [...ctxtIds, msgid.value] },
     i18nKey: msgid.value,

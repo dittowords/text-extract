@@ -60,6 +60,33 @@ describe("poExtractor", () => {
     expect(hits[0].context.identifiers).toEqual(["Hello, world"]);
   });
 
+  test("locates a hit on the line its value is written on", async () => {
+    const source = [
+      `msgid "unread_one"`,
+      `msgid_plural "unread_many"`,
+      `msgstr[0] "1 unread message"`,
+      `msgstr[1] "%d unread messages"`,
+      ``,
+    ].join("\n");
+    const hits = await extract(source);
+
+    expect(hits.map((h) => [h.value, h.location.line])).toEqual([
+      ["1 unread message", 3],
+      ["%d unread messages", 4],
+    ]);
+    for (const hit of hits) {
+      expect(source.split("\n")[hit.location.line - 1]).toContain(hit.snapshotText);
+    }
+  });
+
+  test("locates a stitched value on the line its chunk group starts", async () => {
+    const source = [`msgid "greeting"`, `msgstr ""`, `"Welcome back, "`, `"friend"`, ``].join("\n");
+    const hits = await extract(source);
+
+    expect(hits[0].value).toBe("Welcome back, friend");
+    expect(hits[0].location.line).toBe(2);
+  });
+
   test("ignores PO comments", async () => {
     const source = [`# translator comment`, `#. extracted`, `msgid "Save"`, `msgstr "Save"`, ``].join("\n");
     const hits = await extract(source);
