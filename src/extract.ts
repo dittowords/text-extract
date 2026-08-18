@@ -1,18 +1,18 @@
 import fs from "fs/promises";
-import { loadGlobby } from "./lang/globby";
 import path from "path";
+import { loadGlobby } from "./lang/globby";
 
+import { createHash } from "crypto";
+import type { FileDiscoveryStats } from "./lang/file-discovery";
+import type { Language } from "./lang/registry";
+import type { ExtractedHit } from "./lang/types";
+import { shouldEmit } from "./rules";
 import {
   DittoScanDetectionKindSchema,
   type DittoScanCandidate,
   type DittoScanDetectionKind,
 } from "./types";
-import { createHash } from "crypto";
-import type { FileDiscoveryStats } from "./lang/file-discovery";
-import type { ExtractedHit } from "./lang/types";
-import { shouldEmit } from "./rules";
 import { walkCodebase } from "./walk";
-import type { Language } from "./lang/registry";
 
 export interface DittoScanExtractOptions {
   inputPath: string;
@@ -53,9 +53,7 @@ const MAX_CONTEXT_LINE_CHARS = 200;
 // Maps a dependency name in package.json to the framework token we surface
 // to the LLM. Only frameworks that meaningfully shift the user-facing
 // likelihood of strings are listed (UI frameworks, server frameworks).
-const FRAMEWORK_MARKERS: ReadonlyArray<
-  readonly [pattern: RegExp, token: string]
-> = [
+const FRAMEWORK_MARKERS: ReadonlyArray<readonly [pattern: RegExp, token: string]> = [
   [/^react-native$/, "react-native"],
   [/^react(-dom)?$/, "react"],
   [/^next$/, "next"],
@@ -76,9 +74,10 @@ const FRAMEWORK_MARKERS: ReadonlyArray<
 ];
 
 function zeroKindCounts(): Record<DittoScanDetectionKind, number> {
-  return Object.fromEntries(
-    DittoScanDetectionKindSchema.options.map((k) => [k, 0])
-  ) as Record<DittoScanDetectionKind, number>;
+  return Object.fromEntries(DittoScanDetectionKindSchema.options.map((k) => [k, 0])) as Record<
+    DittoScanDetectionKind,
+    number
+  >;
 }
 
 function buildSourceContext(lines: string[], targetLine: number): string {
@@ -140,9 +139,7 @@ async function detectFramework(inputPath: string): Promise<string[]> {
   let dir = path.resolve(inputPath);
   while (true) {
     try {
-      ingestPackageJson(
-        await fs.readFile(path.join(dir, "package.json"), "utf8")
-      );
+      ingestPackageJson(await fs.readFile(path.join(dir, "package.json"), "utf8"));
     } catch {
       // no package.json here, keep walking
     }
@@ -189,8 +186,7 @@ async function detectFramework(inputPath: string): Promise<string[]> {
 
 const ANDROID_MARKER_RE =
   /(?:^|\/)(?:AndroidManifest\.xml|build\.gradle(?:\.kts)?|settings\.gradle(?:\.kts)?)$/;
-const IOS_MARKER_RE =
-  /(?:^|\/)(?:[^/]+\.xcodeproj\/project\.pbxproj|Package\.swift|Podfile)$/;
+const IOS_MARKER_RE = /(?:^|\/)(?:[^/]+\.xcodeproj\/project\.pbxproj|Package\.swift|Podfile)$/;
 
 async function detectMobilePlatforms(inputPath: string): Promise<string[]> {
   const tokens = new Set<string>();
@@ -213,7 +209,7 @@ async function detectMobilePlatforms(inputPath: string): Promise<string[]> {
       ignore: ["**/node_modules/**", "**/.git/**", "**/build/**", "**/Pods/**"],
       followSymbolicLinks: false,
       suppressErrors: true,
-    }
+    },
   );
   for (const m of matches) {
     if (ANDROID_MARKER_RE.test(m)) tokens.add("android");
@@ -236,25 +232,12 @@ async function isRepoRoot(dir: string): Promise<boolean> {
 
 // Deterministic id for a candidate so the same string in the same place gets
 // the same id across runs.
-export function makeCandidateId(
-  file: string,
-  line: number,
-  column: number,
-  value: string
-): string {
-  return createHash("sha1")
-    .update(`${file}:${line}:${column}:${value}`)
-    .digest("hex")
-    .slice(0, 12);
+export function makeCandidateId(file: string, line: number, column: number, value: string): string {
+  return createHash("sha1").update(`${file}:${line}:${column}:${value}`).digest("hex").slice(0, 12);
 }
 
-/**
- * The extraction step for one resolved file, no I/O. Both `runExtract` and
- * `extractFile` route through here so there's only one copy of it. Extractor
- * failures propagate; the caller decides what a bad file costs.
- */
 export function assignOccurrenceIndexes(
-  hits: readonly Pick<ExtractedHit, "value" | "location">[]
+  hits: readonly Pick<ExtractedHit, "value" | "location">[],
 ): number[] {
   const sourceOrder = hits
     .map((_, index) => index)
@@ -276,6 +259,11 @@ export function assignOccurrenceIndexes(
   return indexes;
 }
 
+/**
+ * The extraction step for one resolved file, no I/O. Both `runExtract` and
+ * `extractFile` route through here so there's only one copy of it. Extractor
+ * failures propagate; the caller decides what a bad file costs.
+ */
 export async function extractFromResolvedFile(args: {
   relPath: string;
   source: string;
@@ -284,8 +272,7 @@ export async function extractFromResolvedFile(args: {
   localeKey: string | null;
   framework: string[];
 }): Promise<DittoScanCandidate[]> {
-  const { relPath, source, language, languageLabel, localeKey, framework } =
-    args;
+  const { relPath, source, language, languageLabel, localeKey, framework } = args;
   const hits = await language.extractor.extract({
     source,
     kind: language.id,
@@ -299,12 +286,7 @@ export async function extractFromResolvedFile(args: {
 
   for (const [index, hit] of emitted.entries()) {
     candidates.push({
-      id: makeCandidateId(
-        relPath,
-        hit.location.line,
-        hit.location.column,
-        hit.value
-      ),
+      id: makeCandidateId(relPath, hit.location.line, hit.location.column, hit.value),
       value_raw: hit.value,
       detection_kind: hit.context.parentRole,
       location: {
@@ -326,18 +308,13 @@ export async function extractFromResolvedFile(args: {
   return candidates;
 }
 
-export async function runExtract(
-  opts: DittoScanExtractOptions
-): Promise<DittoScanExtractResult> {
+export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoScanExtractResult> {
   const t0 = Date.now();
   const framework = await detectFramework(opts.inputPath);
-  const { files, filesSkippedMinified, i18nFileDiscovery } = await walkCodebase(
-    opts.inputPath
-  );
+  const { files, filesSkippedMinified, i18nFileDiscovery } = await walkCodebase(opts.inputPath);
 
   const filesByKind: Record<string, number> = {};
-  for (const f of files)
-    filesByKind[f.language.id] = (filesByKind[f.language.id] ?? 0) + 1;
+  for (const f of files) filesByKind[f.language.id] = (filesByKind[f.language.id] ?? 0) + 1;
 
   const candidatesByKind = zeroKindCounts();
   const candidates: DittoScanCandidate[] = [];
