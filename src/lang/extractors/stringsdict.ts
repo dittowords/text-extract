@@ -1,6 +1,7 @@
 import { Lang, parse, type SgNode } from "@ast-grep/napi";
 
 import type { ExtractedHit, LanguageExtractor } from "../types";
+import { innerText } from "./xml";
 
 /**
  * iOS `.stringsdict` plurals file. The format is plist XML:
@@ -62,21 +63,19 @@ function walkDict(dictEl: SgNode, path: string[], out: ExtractedHit[]): void {
     const keyEl = items[i];
     const valueEl = items[i + 1];
     if (tagName(keyEl) !== "key") continue;
-    const key = elementText(keyEl);
-    if (key === null) continue;
+    const key = innerText(keyEl)?.value ?? null;
+    if (key === null || key.length === 0) continue;
     const tag = tagName(valueEl);
     if (tag === "dict") {
       walkDict(valueEl, [...path, key], out);
     } else if (tag === "string") {
       if (!USER_FACING_KEYS.has(key)) continue;
-      const value = elementText(valueEl);
-      if (value === null || value.trim().length === 0) continue;
-      const textNode = valueEl.children().find((c) => c.kind() === "text");
-      const range = (textNode ?? valueEl).range();
+      const inner = innerText(valueEl);
+      if (inner === null || inner.value.length === 0) continue;
       out.push({
-        value,
-        location: { line: range.start.line + 1, column: range.start.column + 1 },
-        snapshotText: value,
+        value: inner.value,
+        location: { line: inner.line, column: inner.column },
+        snapshotText: inner.raw,
         context: { parentRole: "resource_value", identifiers: [...path, key] },
         // The top-level dict key is the localization lookup key; deeper
         // segments (format-spec name, plural category) are structure.
@@ -94,11 +93,6 @@ function tagName(el: SgNode): string | null {
       .find((c) => c.kind() === "tag_name")
       ?.text() ?? null
   );
-}
-
-function elementText(el: SgNode): string | null {
-  const text = el.children().find((c) => c.kind() === "text");
-  return text?.text() ?? null;
 }
 
 function hasAncestorTag(node: SgNode, name: string): boolean {

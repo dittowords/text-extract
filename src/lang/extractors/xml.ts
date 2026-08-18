@@ -70,7 +70,7 @@ export function emitTextHit(
 
 // All of an element's inner text, with nested markup (`<xliff:g>`, `<b>`) stripped.
 // Reads the source span: the grammar drops the whitespace next to a nested tag.
-function innerText(element: SgNode): { value: string; raw: string; line: number; column: number } | null {
+export function innerText(element: SgNode): { value: string; raw: string; line: number; column: number } | null {
   const children = element.children();
   const start = children.find((c) => c.kind() === "start_tag");
   const end = children.find((c) => c.kind() === "end_tag");

@@ -177,6 +177,12 @@ const cases: {
             <string>%d items</string>
           </dict>
         </dict>
+        <key>Tom &amp; Jerry</key>
+        <dict>
+          <key>NSStringLocalizedFormatKey</key>
+          <string>Tom &amp; Jerry, %#@items@</string>
+          </dict>
+        </dict>
       </dict>
     </plist>`,
   },
@@ -293,6 +299,40 @@ describe.each(cases)("$name snapshotText", ({ extractor, kind, source }) => {
     }
   });
 });
+
+// The XML formats are the ones whose grammar splits a text node at every entity
+// and nested tag, so a parser that reads only the first piece truncates the
+// value. A whole element's inner text is bounded by `>` and `<` in the source
+// (or by the CDATA brackets), so checking the span's boundaries catches a
+// truncated read without reimplementing any decoding.
+const XML_FAMILY = ["android-resources", "resx", "xliff", "stringsdict"];
+
+describe.each(cases.filter((c) => XML_FAMILY.includes(c.name)))(
+  "$name snapshotText spans whole elements",
+  ({ extractor, kind, source }) => {
+    test("every span runs from one tag boundary to the next", async () => {
+      const hits = await extractor.extract({ source, kind });
+
+      expect(hits.length).toBeGreaterThan(0);
+      for (const hit of hits) {
+        const spans = allOccurrences(source, hit.snapshotText);
+        expect(spans.length).toBeGreaterThan(0);
+        const wellBounded = spans.some((at) => {
+          const before = source[at - 1];
+          const after = source[at + hit.snapshotText.length];
+          return (before === ">" || before === "[") && (after === "<" || after === "]");
+        });
+        expect(wellBounded).toBe(true);
+      }
+    });
+  }
+);
+
+function allOccurrences(haystack: string, needle: string): number[] {
+  const out: number[] = [];
+  for (let at = haystack.indexOf(needle); at !== -1; at = haystack.indexOf(needle, at + 1)) out.push(at);
+  return out;
+}
 
 describe("snapshotText keeps what the value drops", () => {
   const tsx = javascriptExtractor(Lang.Tsx);
