@@ -2,6 +2,8 @@ import { type SgNode } from "@ast-grep/napi";
 
 import type { ExtractedHit } from "../types";
 
+const CDATA_MARKER = "<![CDATA[";
+
 export function tagName(element: SgNode): string | null {
   const start = element.children().find((c) => c.kind() === "start_tag");
   return (
@@ -53,8 +55,10 @@ export function emitTextHit(
   transformValue?: (value: string) => string,
 ): void {
   if (source !== undefined && elementContainsCdata(element, source)) return;
-  const inner = innerText(element);
-  if (!inner || inner.value.length === 0) return;
+  const inner = innerText(element, source);
+  // A recovered span can reach past the point the grammar stopped at, so the
+  // range check above may have missed a CDATA section that's now in view.
+  if (!inner || inner.value.length === 0 || inner.raw.includes(CDATA_MARKER)) return;
   const { value, raw, line, column } = inner;
   out.push({
     value: transformValue ? transformValue(value) : value,
@@ -70,17 +74,32 @@ export function emitTextHit(
 
 // All of an element's inner text, with nested markup (`<xliff:g>`, `<b>`) stripped.
 // Reads the source span: the grammar drops the whitespace next to a nested tag.
+//
+// With `source`, an element the grammar left without an `end_tag` is recovered
+// by finding its closing tag in the text. HTML void elements (`<source>`,
+// notably, which XLIFF uses for the original copy) can't hold children, so the
+// grammar closes them at the first nested tag, promotes that tag to a sibling
+// and demotes the real `</source>` to an `erroneous_end_tag`.
 export function innerText(
   element: SgNode,
+  source?: string,
 ): { value: string; raw: string; line: number; column: number } | null {
   const children = element.children();
   const start = children.find((c) => c.kind() === "start_tag");
+  if (!start) return null;
+  const from = start.range().end.index;
   const end = children.find((c) => c.kind() === "end_tag");
-  if (!start || !end) return null;
+  const to = end
+    ? end.range().start.index
+    : source === undefined
+    ? -1
+    : findClosingTag(source, tagName(element), from);
+  if (to === -1) return null;
   const offset = element.range().start.index;
-  const raw = element
-    .text()
-    .slice(start.range().end.index - offset, end.range().start.index - offset);
+  const raw =
+    source === undefined
+      ? element.text().slice(from - offset, to - offset)
+      : source.slice(from, to);
   const { line, column } = start.range().end;
   return {
     value: decodeXmlEntities(raw.replace(/<[^>]*>/g, "")).trim(),
@@ -88,6 +107,15 @@ export function innerText(
     line: line + 1,
     column: column + 1,
   };
+}
+
+// Offset of the first `</tag>` at or after `from`, or -1. The XML formats
+// don't nest an element inside another of the same name, so the first match
+// is the right one.
+function findClosingTag(source: string, tag: string | null, from: number): number {
+  if (!tag) return -1;
+  const at = source.slice(from).search(new RegExp(`</${escapeRegex(tag)}\\s*>`));
+  return at === -1 ? -1 : from + at;
 }
 
 // `&amp;` resolves last, so an escaped entity like `&amp;lt;` stays `&lt;`.
@@ -104,7 +132,7 @@ function decodeXmlEntities(text: string): string {
 
 function elementContainsCdata(element: SgNode, source: string): boolean {
   const range = element.range();
-  const idx = source.indexOf("<![CDATA[", range.start.index);
+  const idx = source.indexOf(CDATA_MARKER, range.start.index);
   return idx !== -1 && idx < range.end.index;
 }
 
@@ -118,8 +146,6 @@ export interface CdataMatch {
   // for hit locations so they point at the extracted text rather than the tag.
   valueOffset: number;
 }
-
-const CDATA_MARKER = "<![CDATA[";
 
 // ast-grep's HTML grammar drops CDATA text nodes silently, so an AST walk
 // over `<value><![CDATA[...]]></value>` sees no text child at all. This
