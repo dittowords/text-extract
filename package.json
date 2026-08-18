@@ -1,6 +1,6 @@
 {
   "name": "@dittowords/text-extract",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Deterministic extraction of candidate user-facing strings from a codebase.",
   "license": "MIT",
   "main": "dist/index.js",
