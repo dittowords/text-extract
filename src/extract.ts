@@ -230,10 +230,13 @@ async function isRepoRoot(dir: string): Promise<boolean> {
   return false;
 }
 
-// Deterministic id for a candidate so the same string in the same place gets
-// the same id across runs.
-export function makeCandidateId(file: string, line: number, column: number, value: string): string {
-  return createHash("sha1").update(`${file}:${line}:${column}:${value}`).digest("hex").slice(0, 12);
+// Deterministic id for a candidate: a string is identified by its file, its
+// text, and which repeat it is
+export function makeCandidateId(file: string, value: string, occurrenceIndex: number): string {
+  return createHash("sha1")
+    .update(`${file}:${value}:${occurrenceIndex}`)
+    .digest("hex")
+    .slice(0, 12);
 }
 
 /**
@@ -295,7 +298,7 @@ export async function extractFromResolvedFile(args: {
 
   for (const [index, hit] of emitted.entries()) {
     candidates.push({
-      id: makeCandidateId(relPath, hit.location.line, hit.location.column, hit.value),
+      id: makeCandidateId(relPath, hit.value, occurrenceIndexes[index]),
       value_raw: hit.value,
       detection_kind: hit.context.parentRole,
       location: {
