@@ -109,9 +109,15 @@ export function innerText(
   };
 }
 
-// Offset of the first `</tag>` at or after `from`, or -1. The XML formats
-// don't nest an element inside another of the same name, so the first match
-// is the right one.
+/**
+ * Offset of the first `</tag>` at or after `from`, or -1 when there is none.
+ * Used to recover an element the grammar left unclosed, where the tree offers
+ * no `end_tag` to read the span's end from.
+ *
+ * The first match is the right one: the XML formats here don't nest an element
+ * inside another of the same name, so no depth tracking is needed. A `tag` of
+ * `null` — an element whose name the tree didn't give us — finds nothing.
+ */
 function findClosingTag(source: string, tag: string | null, from: number): number {
   if (!tag) return -1;
   const at = source.slice(from).search(new RegExp(`</${escapeRegex(tag)}\\s*>`));
