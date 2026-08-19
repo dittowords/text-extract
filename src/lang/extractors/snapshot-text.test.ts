@@ -231,6 +231,10 @@ const cases: {
           <trans-unit id="wrapped">
             <source><![CDATA[Raw & <b>bold</b>]]></source>
           </trans-unit>
+          <trans-unit id="placeholder">
+            <source>Hello <xliff:g id="n">%s</xliff:g></source>
+            <target>Bonjour <xliff:g id="n">%s</xliff:g></target>
+          </trans-unit>
         </body>
       </file>
     </xliff>`,
@@ -381,16 +385,17 @@ describe("snapshotText spans regions that aren't replaceable as-is", () => {
 
   // `<source>` is a void element in HTML, so the grammar refuses to nest a
   // child inside it: the tree comes back with no end_tag and `</source>`
-  // demoted to an erroneous_end_tag, which drops the hit before any snapshot
-  // is taken. An XLIFF unit with an inline placeholder therefore yields no
-  // candidate at all today — not a candidate with a missing span.
-  test("XLIFF source wrapping a placeholder element yields no hit at all", async () => {
+  // demoted to an erroneous_end_tag. `innerText` recovers the span by finding
+  // the closing tag in the source.
+  test("XLIFF source wrapping a placeholder element keeps the placeholder in the span", async () => {
     const source = `<xliff><file><body><trans-unit id="k">
       <source>Hello <xliff:g id="n">%s</xliff:g></source>
     </trans-unit></body></file></xliff>`;
     const hits = await xliffExtractor.extract({ source, kind: "xml" });
 
-    expect(hits).toEqual([]);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].value).toBe("Hello %s");
+    expect(hits[0].snapshotText).toBe(`Hello <xliff:g id="n">%s</xliff:g>`);
   });
 
   test("XML entities and surrounding whitespace stay in the span", async () => {
