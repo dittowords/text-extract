@@ -22,15 +22,12 @@ export const yamlI18nExtractor: LanguageExtractor = {
 
     const contents = doc.contents as YamlNode | null;
     const out: ExtractedHit[] = [];
-    walk(
-      contents,
-      [],
-      { source, anchors: collectAnchors(contents, new Map()), resolving: new Set() },
-      out,
-    );
+    walk(contents, [], { source, doc, resolving: new Set() }, out);
     return out;
   },
 };
+
+const MERGE_KEY = "<<";
 
 const PLURAL_SUFFIX_RE = /^(.+)_(zero|one|two|few|many|other)$/;
 
@@ -52,16 +49,16 @@ interface YamlMap {
 interface YamlSeq {
   items: YamlNode[];
 }
-// `farewell: *hello` — carries the anchor name and a range, and no `value`
-// at all. Merge keys (`<<: *defaults`) parse to the same node.
 interface YamlAlias {
   source: string;
   range?: [number, number, number] | null;
+  // Asks the parser which anchor this points at. The same anchor name can be
+  // declared more than once, and an alias uses whichever came last before it,
+  // so we can't just look the name up in a map.
+  resolve(doc: unknown): YamlNode;
 }
 type YamlNode = YamlScalar | YamlMap | YamlSeq | YamlAlias | null | undefined;
 
-// The source region a hit reports when it was reached through an alias: the
-// `*hello` reference itself, not the anchored text somewhere else in the file.
 interface Region {
   start: number;
   end: number;
@@ -93,11 +90,8 @@ function isScalar(node: YamlNode): node is YamlScalar {
   );
 }
 
-/**
- * True for an alias node (`*hello`). A `Scalar` also carries a `source`
- * property — its raw text — so the absence of `value` is what separates the
- * two, and `items` rules out a map or sequence.
- */
+// A plain scalar has a `source` property too, so what sets an alias apart is
+// that it has no `value`.
 function isAlias(node: YamlNode): node is YamlAlias {
   return (
     !!node &&
@@ -107,44 +101,26 @@ function isAlias(node: YamlNode): node is YamlAlias {
   );
 }
 
-/**
- * Every anchor in the document, keyed by name, so an alias can be resolved
- * without re-walking the tree for each one. Runs once before the main walk;
- * an anchor may be declared after the alias that uses it, so a single pass
- * that resolved lazily would miss those.
- */
-function collectAnchors(node: YamlNode, into: Map<string, YamlNode>): Map<string, YamlNode> {
-  if (!node || typeof node !== "object") return into;
-  const anchor = (node as { anchor?: unknown }).anchor;
-  if (typeof anchor === "string") into.set(anchor, node);
-  if (isMap(node)) {
-    for (const pair of node.items) {
-      collectAnchors(pair.key as YamlNode, into);
-      collectAnchors(pair.value, into);
-    }
-  } else if (isSeq(node)) {
-    for (const item of node.items) collectAnchors(item, into);
-  }
-  return into;
-}
-
-/**
- * The source region of the `*hello` reference itself. `null` when the parser
- * gave the node no range, in which case hits under it fall back to their own.
- */
 function aliasRegion(node: YamlAlias): Region | null {
   return node.range ? { start: node.range[0], end: node.range[1] } : null;
 }
 
 interface WalkContext {
   source: string;
-  anchors: Map<string, YamlNode>;
+  doc: unknown;
   // Anchor names currently being resolved, so `&a [*a]` can't recurse forever.
   resolving: Set<string>;
 }
 
-// `region` is set when this subtree was reached through an alias: every hit
-// under it reports the alias reference as its source region and location.
+/**
+ * Descends one node, appending a hit for every string leaf under it. `path` is
+ * the key path so far, which becomes the hit's `i18n_key`: map keys by name,
+ * sequence items by index. Non-string scalars are not a shape we emit on.
+ *
+ * `region` is set when this subtree was reached through an alias, and makes
+ * every hit under it report that reference as its span and location instead of
+ * its own.
+ */
 function walk(
   node: YamlNode,
   path: string[],
@@ -158,11 +134,17 @@ function walk(
     return;
   }
   if (isMap(node)) {
+    // When the same key arrives twice, YAML keeps one of them: a key written
+    // out here beats one pulled in by `<<`, and an earlier `<<` beats a later
+    // one. The winner replaces the other outright, it doesn't merge with it.
+    const taken = new Set<string>();
     for (const pair of node.items) {
-      if (pair.key?.value === "<<") {
-        // A merge key folds the anchored map's keys into this one, so its
-        // leaves belong to the merging path — `page`, not `page.<<`.
-        walkMerge(pair.value, path, ctx, out, region);
+      const key = pair.key?.value;
+      if (typeof key === "string" && key !== MERGE_KEY) taken.add(key);
+    }
+    for (const pair of node.items) {
+      if (pair.key?.value === MERGE_KEY) {
+        walkMerge(pair.value, path, ctx, out, taken, region);
         continue;
       }
       if (!pair.key || typeof pair.key.value !== "string") continue;
@@ -185,6 +167,13 @@ function walk(
  * lands at the alias's key path rather than the anchor's. Returns without
  * emitting when the anchor is missing, or when it is already being resolved
  * further up the chain — `&r` containing `*r` would otherwise recurse forever.
+ *
+ * The parser picks the anchor, which matters when a name is declared twice:
+ * an alias reads the last declaration above it, not the last in the file.
+ *
+ * Values under the anchor report the alias as their region, since that's what
+ * is written at this key. An alias reached through another keeps the outer
+ * one's region.
  */
 function walkAlias(
   node: YamlAlias,
@@ -193,7 +182,7 @@ function walkAlias(
   out: ExtractedHit[],
   region?: Region,
 ): void {
-  const target = ctx.anchors.get(node.source);
+  const target = node.resolve(ctx.doc);
   if (!target || ctx.resolving.has(node.source)) return;
   ctx.resolving.add(node.source);
   // An alias nested under another alias keeps the outermost reference as its
@@ -206,19 +195,45 @@ function walkAlias(
  * Handles a merge key's value: `<<: *defaults`, or `<<: [*a, *b]` for several
  * maps merged at once. Each anchored map's leaves are walked under the merging
  * path, so `<<: *d` inside `page` yields `en.page.title`, not `en.page.<<`.
+ *
+ * `taken` is every key the merging map has already got — the ones written out
+ * in it, plus whatever an earlier anchor in a `<<` list supplied. Keys already
+ * in there are skipped, and the ones taken here are added to it, so a list is
+ * resolved left to right and the same winner YAML would pick is the one that
+ * survives. It's mutated, and shared across the whole map's merges.
+ *
+ * Does nothing for an anchor that's missing, doesn't point at a map, or is
+ * already being walked further up. A merged map may itself merge another.
  */
 function walkMerge(
   value: YamlNode,
   path: string[],
   ctx: WalkContext,
   out: ExtractedHit[],
+  taken: Set<string>,
   region?: Region,
 ): void {
   if (isSeq(value)) {
-    for (const item of value.items) walkMerge(item, path, ctx, out, region);
+    for (const item of value.items) walkMerge(item, path, ctx, out, taken, region);
     return;
   }
-  if (isAlias(value)) walkAlias(value, path, ctx, out, region);
+  if (!isAlias(value)) return;
+  const target = value.resolve(ctx.doc);
+  if (!isMap(target) || ctx.resolving.has(value.source)) return;
+  ctx.resolving.add(value.source);
+  const mergeRegion = region ?? aliasRegion(value) ?? undefined;
+  for (const pair of target.items) {
+    const key = pair.key?.value;
+    if (typeof key !== "string") continue;
+    if (key === MERGE_KEY) {
+      walkMerge(pair.value, path, ctx, out, taken, mergeRegion);
+      continue;
+    }
+    if (taken.has(key)) continue;
+    taken.add(key);
+    walk(pair.value, [...path, key], ctx, out, mergeRegion);
+  }
+  ctx.resolving.delete(value.source);
 }
 
 /**
