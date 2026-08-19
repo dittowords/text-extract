@@ -102,3 +102,43 @@ describe("poExtractor", () => {
     expect(hits[0].value).toBe("Save");
   });
 });
+
+describe("poExtractor locations", () => {
+  const textAt = (source: string, line: number, column: number) =>
+    source.split("\n")[line - 1].slice(column - 1);
+
+  test("points at the opening quote of the value, not the keyword", async () => {
+    const source = [`msgid "greeting"`, `msgstr "Bonjour"`, ``].join("\n");
+    const hits = await extract(source);
+
+    expect(hits[0].location).toEqual({ line: 2, column: 8 });
+    expect(textAt(source, 2, 8)).toBe(hits[0].snapshotText);
+  });
+
+  test("gives each plural form the column of its own msgstr line", async () => {
+    const source = [
+      `msgid "unread_one"`,
+      `msgid_plural "unread_many"`,
+      `msgstr[0] "1 unread message"`,
+      `msgstr[1] "%d unread messages"`,
+      ``,
+    ].join("\n");
+    const hits = await extract(source);
+
+    expect(hits.map((h) => h.location)).toEqual([
+      { line: 3, column: 11 },
+      { line: 4, column: 11 },
+    ]);
+    for (const hit of hits) {
+      expect(textAt(source, hit.location.line, hit.location.column)).toBe(hit.snapshotText);
+    }
+  });
+
+  test("points at the first quote of a stitched multi-line value", async () => {
+    const source = [`msgid "multi"`, `msgstr ""`, `"Hello, "`, `"world"`, ``].join("\n");
+    const hits = await extract(source);
+
+    expect(hits[0].location).toEqual({ line: 2, column: 8 });
+    expect(hits[0].snapshotText.startsWith(textAt(source, 2, 8))).toBe(true);
+  });
+});

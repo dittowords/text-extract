@@ -1,5 +1,5 @@
 import type { ExtractedHit, LanguageExtractor } from "../types";
-import { computeLineOffsets } from "./util";
+import { computeLineOffsets, offsetToLineCol } from "./util";
 
 /**
  * Java `.properties` resource bundles (messages_en.properties, labels.properties, …).
@@ -49,11 +49,12 @@ export const propertiesExtractor: LanguageExtractor = {
       const { key, value, valueStart } = parsed;
       if (value.trim().length === 0) continue;
 
-      const keyColumn = segments[0].indent + 1;
       const spanStart = offsetOfLogicalIndex(segments, lineOffsets, valueStart);
       out.push({
         value,
-        location: { line: startIdx + 1, column: keyColumn },
+        // The value's own position, not the entry's: a continued key pushes
+        // the value onto a later line than the one the entry starts on.
+        location: offsetToLineCol(source, spanStart),
         snapshotText: source.slice(spanStart, lineOffsets[lastIdx] + lines[lastIdx].length),
         context: { parentRole: "resource_value", identifiers: [key] },
         i18nKey: key,

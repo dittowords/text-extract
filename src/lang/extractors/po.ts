@@ -68,9 +68,12 @@ export const poExtractor: LanguageExtractor = {
       }
       i = j;
 
+      const openQuote = lines[startLine - 1].indexOf('"');
       const chunk: PoChunk = {
         value: acc,
         line: startLine,
+        // The opening quote of the chunk group, where `snapshot` starts.
+        column: openQuote === -1 ? 1 : openQuote + 1,
         snapshot: quotedSpan(source, lines, lineOffsets, startLine - 1, lastLineIdx),
       };
 
@@ -105,6 +108,7 @@ export const poExtractor: LanguageExtractor = {
 interface PoChunk {
   value: string;
   line: number;
+  column: number;
   snapshot: string;
 }
 
@@ -136,7 +140,7 @@ function emit(entry: PoEntry, out: ExtractedHit[]): void {
       if (chunk === null) continue;
       out.push({
         value: chunk.value,
-        location: { line: chunk.line, column: 1 },
+        location: { line: chunk.line, column: chunk.column },
         snapshotText: chunk.snapshot,
         context: {
           parentRole: "resource_value",
@@ -153,7 +157,7 @@ function emit(entry: PoEntry, out: ExtractedHit[]): void {
   if (chunk === null) return;
   out.push({
     value: chunk.value,
-    location: { line: chunk.line, column: 1 },
+    location: { line: chunk.line, column: chunk.column },
     snapshotText: chunk.snapshot,
     context: { parentRole: "resource_value", identifiers: [...ctxtIds, msgid.value] },
     i18nKey: msgid.value,
