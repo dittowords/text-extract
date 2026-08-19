@@ -1,4 +1,5 @@
 import type { ExtractedHit, LanguageExtractor } from "../types";
+import { computeLineOffsets } from "./util";
 
 // Gettext `.po` files (Lingui, GNU gettext, Django, Crowdin, …).
 //
@@ -16,6 +17,7 @@ import type { ExtractedHit, LanguageExtractor } from "../types";
 export const poExtractor: LanguageExtractor = {
   async extract({ source }) {
     const lines = source.split(/\r?\n/);
+    const lineOffsets = computeLineOffsets(source);
     const out: ExtractedHit[] = [];
 
     let entry: PoEntry | null = null;
@@ -53,6 +55,7 @@ export const poExtractor: LanguageExtractor = {
       const initial = parsePoString(line.slice(keyword.consumed));
       let acc = initial ?? "";
       const startLine = i + 1; // 1-based
+      let lastLineIdx = i;
       let j = i + 1;
       while (j < lines.length) {
         const nextTrim = lines[j].trim();
@@ -60,28 +63,36 @@ export const poExtractor: LanguageExtractor = {
         const continued = parsePoString(nextTrim);
         if (continued === null) break;
         acc += continued;
+        lastLineIdx = j;
         j++;
       }
       i = j;
 
+      const openQuote = lines[startLine - 1].indexOf('"');
+      const chunk: PoChunk = {
+        value: acc,
+        line: startLine,
+        // The opening quote of the chunk group, where `snapshot` starts.
+        column: openQuote === -1 ? 1 : openQuote + 1,
+        snapshot: quotedSpan(source, lines, lineOffsets, startLine - 1, lastLineIdx),
+      };
+
       switch (keyword.kind) {
         case "msgctxt":
-          entry.msgctxt = acc;
+          entry.msgctxt = chunk;
           break;
         case "msgid":
-          entry.msgid = acc;
-          entry.msgidLine = startLine;
+          entry.msgid = chunk;
           break;
         case "msgid_plural":
-          entry.msgidPlural = acc;
-          entry.msgidPluralLine = startLine;
+          entry.msgidPlural = chunk;
           break;
         case "msgstr":
-          entry.msgstr = acc;
+          entry.msgstr = chunk;
           break;
         case "msgstr_indexed":
           if (!entry.msgstrPlural) entry.msgstrPlural = new Map();
-          entry.msgstrPlural.set(keyword.index ?? 0, acc);
+          entry.msgstrPlural.set(keyword.index ?? 0, chunk);
           break;
       }
     }
@@ -91,60 +102,87 @@ export const poExtractor: LanguageExtractor = {
   },
 };
 
+// One `msgid`/`msgstr`/… string, plus where it sits in the file. `snapshot`
+// is the contiguous source region the string was stitched from: the first
+// quote of the chunk group through the last quote of its final line.
+interface PoChunk {
+  value: string;
+  line: number;
+  column: number;
+  snapshot: string;
+}
+
 interface PoEntry {
-  msgctxt?: string;
-  msgid?: string;
-  msgidLine?: number;
-  msgidPlural?: string;
-  msgidPluralLine?: number;
-  msgstr?: string;
-  msgstrPlural?: Map<number, string>;
+  msgctxt?: PoChunk;
+  msgid?: PoChunk;
+  msgidPlural?: PoChunk;
+  msgstr?: PoChunk;
+  msgstrPlural?: Map<number, PoChunk>;
 }
 
 function emit(entry: PoEntry, out: ExtractedHit[]): void {
   // Skip header entry (`msgid ""`).
-  if (entry.msgid === undefined || entry.msgid === "") return;
+  if (entry.msgid === undefined || entry.msgid.value === "") return;
+  const msgid = entry.msgid;
 
-  const ctxtIds = entry.msgctxt ? [entry.msgctxt] : [];
+  const ctxtIds = entry.msgctxt ? [entry.msgctxt.value] : [];
 
   if (entry.msgidPlural !== undefined) {
-    const plural = entry.msgstrPlural ?? new Map<number, string>();
+    const plural = entry.msgstrPlural ?? new Map<number, PoChunk>();
     // Always consider indexes 0 (singular) and 1 (plural) even when no
     // translation is present, so the source msgid/msgidPlural still
     // surface in base-locale catalogs.
     const indexes = new Set<number>([0, 1, ...plural.keys()]);
     for (const idx of [...indexes].sort((a, b) => a - b)) {
-      const source = idx === 0 ? entry.msgid : entry.msgidPlural;
+      const source = idx === 0 ? msgid : entry.msgidPlural;
       if (source === undefined) continue;
-      const value = pickNonEmpty(plural.get(idx), source);
-      if (value === null) continue;
-      const line = idx === 0 ? entry.msgidLine : entry.msgidPluralLine;
-      if (line === undefined) continue;
+      const chunk = pickNonEmpty(plural.get(idx), source);
+      if (chunk === null) continue;
       out.push({
-        value,
-        location: { line, column: 1 },
-        context: { parentRole: "resource_value", identifiers: [...ctxtIds, entry.msgid, `plural:${idx}`] },
+        value: chunk.value,
+        location: { line: chunk.line, column: chunk.column },
+        snapshotText: chunk.snapshot,
+        context: {
+          parentRole: "resource_value",
+          identifiers: [...ctxtIds, msgid.value, `plural:${idx}`],
+        },
         // msgid is gettext's lookup key; msgctxt stays in identifiers only.
-        i18nKey: entry.msgid,
+        i18nKey: msgid.value,
       });
     }
     return;
   }
 
-  const value = pickNonEmpty(entry.msgstr, entry.msgid);
-  if (value === null || entry.msgidLine === undefined) return;
+  const chunk = pickNonEmpty(entry.msgstr, msgid);
+  if (chunk === null) return;
   out.push({
-    value,
-    location: { line: entry.msgidLine, column: 1 },
-    context: { parentRole: "resource_value", identifiers: [...ctxtIds, entry.msgid] },
-    i18nKey: entry.msgid,
+    value: chunk.value,
+    location: { line: chunk.line, column: chunk.column },
+    snapshotText: chunk.snapshot,
+    context: { parentRole: "resource_value", identifiers: [...ctxtIds, msgid.value] },
+    i18nKey: msgid.value,
   });
 }
 
-function pickNonEmpty(translated: string | undefined, source: string): string | null {
-  if (translated !== undefined && translated.trim().length > 0) return translated;
-  if (source.trim().length > 0) return source;
+function pickNonEmpty(translated: PoChunk | undefined, source: PoChunk): PoChunk | null {
+  if (translated !== undefined && translated.value.trim().length > 0) return translated;
+  if (source.value.trim().length > 0) return source;
   return null;
+}
+
+// First quote of `firstIdx` through the last quote of `lastIdx`, read out of
+// the original source so the region round-trips through `source.includes()`.
+function quotedSpan(
+  source: string,
+  lines: string[],
+  lineOffsets: number[],
+  firstIdx: number,
+  lastIdx: number,
+): string {
+  const openQuote = lines[firstIdx].indexOf('"');
+  const closeQuote = lines[lastIdx].lastIndexOf('"');
+  if (openQuote === -1 || closeQuote === -1) return "";
+  return source.slice(lineOffsets[firstIdx] + openQuote, lineOffsets[lastIdx] + closeQuote + 1);
 }
 
 interface KeywordMatch {

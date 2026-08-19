@@ -30,3 +30,12 @@ export function offsetToLineCol(source: string, offset: number): { line: number;
   }
   return { line, column: offset - lastNewline };
 }
+
+// Start offset of each line, indexed to match `source.split(/\r?\n/)`.
+export function computeLineOffsets(source: string): number[] {
+  const offsets = [0];
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) offsets.push(i + 1);
+  }
+  return offsets;
+}

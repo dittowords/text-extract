@@ -52,6 +52,7 @@ function walk(node: JsonNode, path: string[], source: string, out: ExtractedHit[
     out.push({
       value: node.value,
       location: offsetToLineCol(source, node.start),
+      snapshotText: source.slice(node.start, node.end),
       context: { parentRole: "resource_value", identifiers },
       // The literal key path — keeps the plural suffix ("item_one") that
       // `identifiers` splits into [base, variant].

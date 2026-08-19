@@ -1,6 +1,7 @@
 import { stringsdictExtractor } from "./stringsdict";
 
-const extract = (source: string) => stringsdictExtractor.extract({ source, kind: "ios_stringsdict" });
+const extract = (source: string) =>
+  stringsdictExtractor.extract({ source, kind: "ios_stringsdict" });
 
 const sample = `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
@@ -48,8 +49,40 @@ describe("stringsdictExtractor", () => {
     expect(one?.context.parentRole).toBe("resource_value");
   });
 
+  test("keeps the whole value when it contains an xml entity", async () => {
+    const source = `<?xml version="1.0"?>
+<plist version="1.0"><dict>
+  <key>greet</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key>
+    <string>Tom &amp; Jerry</string>
+  </dict>
+</dict></plist>`;
+    const hits = await extract(source);
+
+    expect(hits[0]?.value).toBe("Tom & Jerry");
+    expect(hits[0]?.snapshotText).toBe("Tom &amp; Jerry");
+  });
+
+  test("keeps the whole value when it contains nested markup", async () => {
+    const source = `<?xml version="1.0"?>
+<plist version="1.0"><dict>
+  <key>greet</key>
+  <dict>
+    <key>NSStringLocalizedFormatKey</key>
+    <string>Hi <b>there</b></string>
+  </dict>
+</dict></plist>`;
+    const hits = await extract(source);
+
+    expect(hits[0]?.value).toBe("Hi there");
+    expect(hits[0]?.snapshotText).toBe("Hi <b>there</b>");
+  });
+
   test("returns empty for an empty plist", async () => {
-    const hits = await extract(`<?xml version="1.0"?>\n<plist version="1.0"><dict></dict></plist>\n`);
+    const hits = await extract(
+      `<?xml version="1.0"?>\n<plist version="1.0"><dict></dict></plist>\n`,
+    );
     expect(hits).toEqual([]);
   });
 });
