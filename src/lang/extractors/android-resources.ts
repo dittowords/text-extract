@@ -1,4 +1,4 @@
-import { Lang, parse, type SgNode } from "@ast-grep/napi";
+import { parseXml, type XmlNode } from "./xml-dom";
 
 import type { ExtractedHit, LanguageExtractor } from "../types";
 import { decodeEscapes, offsetToLineCol } from "./util";
@@ -24,7 +24,7 @@ import { elementAttribute, emitTextHit, findCdataElements, tagName } from "./xml
  */
 export const androidResourceExtractor: LanguageExtractor = {
   async extract({ source }) {
-    const root = parse(Lang.Html, source).root();
+    const root = await parseXml(source);
     const out: ExtractedHit[] = [];
 
     for (const el of root.findAll({ rule: { kind: "element" } })) {
@@ -115,7 +115,7 @@ function findEnclosingResourceParent(source: string, before: number): string | n
   return stack[stack.length - 1] ?? null;
 }
 
-function emitStringElement(el: SgNode, out: ExtractedHit[], source: string): void {
+function emitStringElement(el: XmlNode, out: ExtractedHit[], source: string): void {
   const name = elementAttribute(el, "name");
   emitTextHit(el, name ? [name] : [], out, source, name ?? undefined, decodeEscapes);
 }

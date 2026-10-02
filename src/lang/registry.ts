@@ -1,30 +1,17 @@
-import kotlin from "@ast-grep/lang-kotlin";
-import swift from "@ast-grep/lang-swift";
-import { Lang, registerDynamicLanguage } from "@ast-grep/napi";
-
 import { androidResourceExtractor } from "./extractors/android-resources";
 import { arbExtractor } from "./extractors/arb";
 import { fallbackExtractor } from "./extractors/fallback";
-import { htmlMarkupExtractor } from "./extractors/html-markup";
-import { javascriptExtractor } from "./extractors/javascript";
 import { jsonI18nExtractor } from "./extractors/json-i18n";
-import { kotlinExtractor } from "./extractors/kotlin";
 import { poExtractor } from "./extractors/po";
 import { propertiesExtractor } from "./extractors/properties";
 import { resxExtractor } from "./extractors/resx";
 import { stringsExtractor } from "./extractors/strings";
 import { stringsdictExtractor } from "./extractors/stringsdict";
-import { swiftExtractor } from "./extractors/swift";
-import { vueExtractor } from "./extractors/vue";
+import { grammarExtractor } from "./extractors/grammar";
 import { xcstringsExtractor } from "./extractors/xcstrings";
 import { xliffExtractor } from "./extractors/xliff";
 import { yamlI18nExtractor } from "./extractors/yaml-i18n";
 import type { LanguageExtractor } from "./types";
-
-// Tree-sitter grammars for Kotlin and Swift are not bundled with
-// @ast-grep/napi; they ship as separate prebuilt parsers and get loaded
-// at module init so any consumer importing the registry has them ready.
-registerDynamicLanguage({ kotlin, swift });
 
 export interface Language {
   id: string;
@@ -40,32 +27,9 @@ export interface Language {
 
 export const REGEX_FALLBACK_ID = "regex_fallback";
 
-// Source-code-like extensions handled by the regex fallback when no
-// dedicated language is defined.
-const REGEX_FALLBACK_EXTENSIONS: ReadonlySet<string> = new Set([
-  ".py",
-  ".go",
-  ".rb",
-  ".java",
-  ".rs",
-  ".c",
-  ".h",
-  ".cc",
-  ".cpp",
-  ".hpp",
-  ".m",
-  ".mm",
-  ".cs",
-  ".php",
-  ".lua",
-  ".dart",
-  ".svelte",
-  ".astro",
-  ".hbs",
-  ".ejs",
-  ".liquid",
-  ".erb",
-]);
+// Source-code-like extensions with no grammar either; the regex fallback
+// still catches their quoted literals.
+const REGEX_FALLBACK_EXTENSIONS: ReadonlySet<string> = new Set([".ejs"]);
 
 // `res/values/` and locale-qualified `res/values-<X>/` both flow
 // through; downstream groups by resource key.
@@ -77,16 +41,39 @@ function isAndroidResource(relPath: string): boolean {
 // pass in `walk.ts` rather than by a path predicate here.
 
 export const LANGUAGES: readonly Language[] = [
-  { id: "typescript", extensions: [".ts", ".cts", ".mts"], extractor: javascriptExtractor(Lang.TypeScript) },
-  { id: "tsx", extensions: [".tsx"], extractor: javascriptExtractor(Lang.Tsx) },
-  { id: "javascript", extensions: [".js", ".cjs", ".mjs"], extractor: javascriptExtractor(Lang.JavaScript) },
-  // .jsx uses Tsx because ast-grep's JavaScript grammar doesn't parse JSX.
-  { id: "jsx", extensions: [".jsx"], extractor: javascriptExtractor(Lang.Tsx) },
-  { id: "html", extensions: [".html", ".htm"], extractor: htmlMarkupExtractor },
-  { id: "vue", extensions: [".vue"], extractor: vueExtractor },
+  // Code and markup go through the grammar extractor; `id` is the
+  // `tm-grammars` grammar name.
+  { id: "typescript", extensions: [".ts", ".cts", ".mts"], extractor: grammarExtractor },
+  { id: "tsx", extensions: [".tsx"], extractor: grammarExtractor },
+  { id: "javascript", extensions: [".js", ".cjs", ".mjs"], extractor: grammarExtractor },
+  { id: "jsx", extensions: [".jsx"], extractor: grammarExtractor },
+  { id: "html", extensions: [".html", ".htm"], extractor: grammarExtractor },
+  { id: "vue", extensions: [".vue"], extractor: grammarExtractor },
   // Kotlin grammar also handles .kts (Gradle scripts) and .ktm (Kotlin modules).
-  { id: "kotlin", extensions: [".kt", ".kts", ".ktm"], extractor: kotlinExtractor },
-  { id: "swift", extensions: [".swift"], extractor: swiftExtractor },
+  { id: "kotlin", extensions: [".kt", ".kts", ".ktm"], extractor: grammarExtractor },
+  { id: "swift", extensions: [".swift"], extractor: grammarExtractor },
+  { id: "python", extensions: [".py"], extractor: grammarExtractor },
+  { id: "go", extensions: [".go"], extractor: grammarExtractor },
+  { id: "ruby", extensions: [".rb"], extractor: grammarExtractor },
+  { id: "java", extensions: [".java"], extractor: grammarExtractor },
+  { id: "rust", extensions: [".rs"], extractor: grammarExtractor },
+  { id: "c", extensions: [".c", ".h"], extractor: grammarExtractor },
+  { id: "cpp", extensions: [".cc", ".cpp", ".hpp"], extractor: grammarExtractor },
+  { id: "objective-c", extensions: [".m"], extractor: grammarExtractor },
+  { id: "objective-cpp", extensions: [".mm"], extractor: grammarExtractor },
+  { id: "csharp", extensions: [".cs"], extractor: grammarExtractor },
+  // Laravel templates share the `.php` extension, so they go first.
+  { id: "blade", extensions: [".php"], extractor: grammarExtractor, pathMatches: (p) => /\.blade\.php$/i.test(p) },
+  { id: "php", extensions: [".php"], extractor: grammarExtractor },
+  { id: "lua", extensions: [".lua"], extractor: grammarExtractor },
+  { id: "dart", extensions: [".dart"], extractor: grammarExtractor },
+  { id: "svelte", extensions: [".svelte"], extractor: grammarExtractor },
+  { id: "astro", extensions: [".astro"], extractor: grammarExtractor },
+  { id: "handlebars", extensions: [".hbs"], extractor: grammarExtractor },
+  { id: "liquid", extensions: [".liquid"], extractor: grammarExtractor },
+  { id: "erb", extensions: [".erb"], extractor: grammarExtractor },
+  { id: "jinja-html", extensions: [".jinja", ".jinja2", ".j2", ".njk"], extractor: grammarExtractor },
+  { id: "twig", extensions: [".twig"], extractor: grammarExtractor },
   // iOS .lproj/ files — every locale flows through.
   { id: "ios_strings", extensions: [".strings"], extractor: stringsExtractor },
   { id: "ios_stringsdict", extensions: [".stringsdict"], extractor: stringsdictExtractor },

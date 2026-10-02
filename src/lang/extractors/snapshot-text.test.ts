@@ -1,23 +1,15 @@
-// Side-effect import: registers the dynamic Kotlin and Swift grammars.
-import "../registry";
-
-import { Lang } from "@ast-grep/napi";
 
 import type { LanguageExtractor } from "../types";
 import { androidResourceExtractor } from "./android-resources";
 import { arbExtractor } from "./arb";
 import { fallbackExtractor } from "./fallback";
-import { htmlMarkupExtractor } from "./html-markup";
-import { javascriptExtractor } from "./javascript";
 import { jsonI18nExtractor } from "./json-i18n";
-import { kotlinExtractor } from "./kotlin";
 import { poExtractor } from "./po";
 import { propertiesExtractor } from "./properties";
 import { resxExtractor } from "./resx";
 import { stringsExtractor } from "./strings";
 import { stringsdictExtractor } from "./stringsdict";
-import { swiftExtractor } from "./swift";
-import { vueExtractor } from "./vue";
+import { grammarExtractor } from "./grammar";
 import { xcstringsExtractor } from "./xcstrings";
 import { xliffExtractor } from "./xliff";
 import { yamlI18nExtractor } from "./yaml-i18n";
@@ -30,7 +22,7 @@ const cases: {
 }[] = [
   {
     name: "javascript",
-    extractor: javascriptExtractor(Lang.Tsx),
+    extractor: grammarExtractor,
     kind: "tsx",
     source: `
       const re = "^foo$";
@@ -46,7 +38,7 @@ const cases: {
   },
   {
     name: "html-markup",
-    extractor: htmlMarkupExtractor,
+    extractor: grammarExtractor,
     kind: "html",
     source: `
       <p>Welcome home</p>
@@ -56,7 +48,7 @@ const cases: {
   },
   {
     name: "vue",
-    extractor: vueExtractor,
+    extractor: grammarExtractor,
     kind: "vue",
     source: `
       <template>
@@ -69,7 +61,7 @@ const cases: {
   },
   {
     name: "kotlin",
-    extractor: kotlinExtractor,
+    extractor: grammarExtractor,
     kind: "kotlin",
     source: `
       val greeting = "Don't stop\\nnow"
@@ -79,7 +71,7 @@ const cases: {
   },
   {
     name: "swift",
-    extractor: swiftExtractor,
+    extractor: grammarExtractor,
     kind: "swift",
     source: `
       let greeting = "Don't stop\\nnow"
@@ -340,7 +332,7 @@ function allOccurrences(haystack: string, needle: string): number[] {
 }
 
 describe("snapshotText keeps what the value drops", () => {
-  const tsx = javascriptExtractor(Lang.Tsx);
+  const tsx = grammarExtractor;
 
   test("keeps escape sequences the value decodes", async () => {
     const source = `const message = "Line one\\nLine two";`;
@@ -365,12 +357,15 @@ describe("snapshotText keeps what the value drops", () => {
     expect(hits[0]?.snapshotText).toBe("`Hi ${firstName}, welcome`");
   });
 
-  test("keeps inline markup inside a JSX text run", async () => {
+  test("an inline tag ends a JSX text run; the server joins the pieces", async () => {
     const source = `const a = <p>Read the <b>docs</b> first</p>;`;
     const hits = await tsx.extract({ source, kind: "tsx" });
-    const run = hits.find((h) => h.value.includes("Read the"));
 
-    expect(run?.snapshotText).toBe("Read the ");
+    expect(hits.map((h) => [h.value, h.snapshotText])).toEqual([
+      ["Read the ", "Read the "],
+      ["docs", "docs"],
+      [" first", " first"],
+    ]);
   });
 });
 

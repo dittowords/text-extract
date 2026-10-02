@@ -1,4 +1,4 @@
-import { Lang, parse, type SgNode } from "@ast-grep/napi";
+import { parseXml, type XmlNode } from "./xml-dom";
 
 import type { ExtractedHit, LanguageExtractor } from "../types";
 import { offsetToLineCol } from "./util";
@@ -27,7 +27,7 @@ import { elementAttribute, emitTextHit, tagName } from "./xml";
  */
 export const resxExtractor: LanguageExtractor = {
   async extract({ source }) {
-    const root = parse(Lang.Html, source).root();
+    const root = await parseXml(source);
     const out: ExtractedHit[] = [];
 
     for (const el of root.findAll({ rule: { kind: "element" } })) {
@@ -45,7 +45,7 @@ export const resxExtractor: LanguageExtractor = {
   },
 };
 
-function findChildElement(parent: SgNode, name: string): SgNode | null {
+function findChildElement(parent: XmlNode, name: string): XmlNode | null {
   for (const child of parent.children()) {
     if (child.kind() !== "element") continue;
     if (tagName(child) === name) return child;

@@ -1,83 +1,51 @@
-import { Lang } from "@ast-grep/napi";
+import { extractWithGrammar } from "./grammar";
 
-import { javascriptExtractor } from "./javascript";
+const ts = { extract: ({ source }: { source: string; kind: string }) => extractWithGrammar(source, "typescript") };
+const tsx = { extract: ({ source }: { source: string; kind: string }) => extractWithGrammar(source, "tsx") };
 
-const ts = javascriptExtractor(Lang.TypeScript);
-const tsx = javascriptExtractor(Lang.Tsx);
-
-describe("javascriptExtractor", () => {
-  test("tags import paths as `import` and bare module argv too", async () => {
-    const hits = await ts.extract({ source: `import x from "y";\nrequire("z");\n`, kind: "typescript" });
-    const roles = hits.map((h) => h.context.parentRole);
-    expect(roles).toEqual(["import", "import"]);
+describe("grammar extractor: javascript", () => {
+  test("every literal is a hit; import paths and call arguments are left to the classifier", async () => {
+    const hits = await ts.extract({ source: `import x from "y";\nrequire("z");\nconsole.log("hi");\nt("welcome");\n`, kind: "typescript" });
+    expect(hits.map((h) => [h.value, h.context])).toEqual([
+      ['"y"', { parentRole: "other", identifiers: [] }],
+      ['"z"', { parentRole: "other", identifiers: [] }],
+      ['"hi"', { parentRole: "other", identifiers: [] }],
+      ['"welcome"', { parentRole: "other", identifiers: [] }],
+    ]);
   });
 
-  test("tags `new RegExp(...)` arg as regex_pattern", async () => {
-    const hits = await ts.extract({ source: `const r = new RegExp("^foo$");\n`, kind: "typescript" });
-    const re = hits.find((h) => h.value === '"^foo$"');
-    expect(re?.context.parentRole).toBe("regex_pattern");
-  });
-
-  test("tags object keys as object_key and values as other", async () => {
-    const hits = await ts.extract({ source: `const o = { "label": "Hello" };\n`, kind: "typescript" });
-    const label = hits.find((h) => h.value === '"label"');
-    const hello = hits.find((h) => h.value === '"Hello"');
-    expect(label?.context.parentRole).toBe("object_key");
-    expect(hello?.context.parentRole).toBe("other");
-  });
-
-  test("tags switch cases and equality checks as type_tag", async () => {
-    const source = `function f(x: string) {\n  if (x === "foo") return 1;\n  switch (x) { case "bar": return 2; }\n  return 0;\n}\n`;
-    const hits = await ts.extract({ source, kind: "typescript" });
-    const foo = hits.find((h) => h.value === '"foo"');
-    const bar = hits.find((h) => h.value === '"bar"');
-    expect(foo?.context.parentRole).toBe("type_tag");
-    expect(bar?.context.parentRole).toBe("type_tag");
-  });
-
-  test("captures callee/calleeMember for member-expression calls", async () => {
-    const hits = await ts.extract({ source: `console.log("hi");\nt("welcome");\n`, kind: "typescript" });
-    const hi = hits.find((h) => h.value === '"hi"');
-    const welcome = hits.find((h) => h.value === '"welcome"');
-    expect(hi?.context).toMatchObject({ parentRole: "other", callee: "console", calleeMember: "log" });
-    expect(welcome?.context).toMatchObject({ parentRole: "other", callee: "t" });
-    expect(welcome?.context.calleeMember).toBeUndefined();
-  });
-
-  test("emits jsx_text as markup_text with the enclosing tag", async () => {
-    const hits = await tsx.extract({
-      source: `const e = <button>Save</button>;\n`,
-      kind: "tsx",
-    });
-    const save = hits.find((h) => h.value.trim() === "Save");
-    expect(save?.context.parentRole).toBe("markup_text");
-    expect(save?.context.parentTag).toBe("button");
+  test("emits jsx text as markup_text with its verbatim span", async () => {
+    const hits = await tsx.extract({ source: `const e = <button>Save</button>;\n`, kind: "tsx" });
+    expect(hits).toEqual([
+      { value: "Save", snapshotText: "Save", location: { line: 1, column: 19 }, context: { parentRole: "markup_text", identifiers: [] } },
+    ]);
   });
 
   test("emits JSX attribute string as markup_attr with attribute name in identifiers", async () => {
-    const hits = await tsx.extract({
-      source: `const e = <input placeholder="Email" />;\n`,
-      kind: "tsx",
-    });
+    const hits = await tsx.extract({ source: `const e = <input placeholder="Email" />;\n`, kind: "tsx" });
     const email = hits.find((h) => h.value === '"Email"');
     expect(email?.context.parentRole).toBe("markup_attr");
     expect(email?.context.identifiers).toEqual(["placeholder"]);
   });
 
-  test("suppresses parentTag inside code-shaped JSX ancestors", async () => {
-    const hits = await tsx.extract({
-      source: `const e = <pre><span>npm install</span></pre>;\n`,
-      kind: "tsx",
-    });
-    const inner = hits.find((h) => h.value.trim() === "npm install");
-    expect(inner?.context.parentRole).toBe("markup_text");
-    expect(inner?.context.parentTag).toBeUndefined();
+  test("a JSX spacer hole opens the text node it belongs to; its literal is also its own hit", async () => {
+    const hits = await tsx.extract({ source: `const e = <p><a>docs</a>{" "}and more</p>;\n`, kind: "tsx" });
+    expect(hits.map((h) => [h.value, h.location.column, h.context.parentRole])).toEqual([
+      ["docs", 17, "markup_text"],
+      ['{" "}and more', 25, "markup_text"],
+      ['" "', 26, "other"],
+    ]);
+  });
+
+  test("text inside <pre> is still a hit; the classifier reads the tag from the source", async () => {
+    const hits = await tsx.extract({ source: `const e = <pre><span>npm install</span></pre>;\n`, kind: "tsx" });
+    expect(hits.map((h) => h.value)).toEqual(["npm install"]);
   });
 });
 
 // Escapes are decoded for real JS literals only. Getting this wrong either ships
 // a literal `\n` to users or mangles JSX text, so each branch is pinned.
-describe("javascriptExtractor escape decoding", () => {
+describe("grammar extractor: javascript escape decoding", () => {
   test("decodes escapes in a plain string literal", async () => {
     const hits = await ts.extract({ source: `const m = "line one\\nline two";\n`, kind: "typescript" });
     expect(hits[0].value).toBe('"line one\nline two"');
