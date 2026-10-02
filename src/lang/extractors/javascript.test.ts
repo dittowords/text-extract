@@ -28,6 +28,15 @@ describe("grammar extractor: javascript", () => {
     expect(email?.context.identifiers).toEqual(["placeholder"]);
   });
 
+  test("a JSX spacer hole opens the text node it belongs to; its literal is also its own hit", async () => {
+    const hits = await tsx.extract({ source: `const e = <p><a>docs</a>{" "}and more</p>;\n`, kind: "tsx" });
+    expect(hits.map((h) => [h.value, h.location.column, h.context.parentRole])).toEqual([
+      ["docs", 17, "markup_text"],
+      ['{" "}and more', 25, "markup_text"],
+      ['" "', 26, "other"],
+    ]);
+  });
+
   test("text inside <pre> is still a hit; the classifier reads the tag from the source", async () => {
     const hits = await tsx.extract({ source: `const e = <pre><span>npm install</span></pre>;\n`, kind: "tsx" });
     expect(hits.map((h) => h.value)).toEqual(["npm install"]);

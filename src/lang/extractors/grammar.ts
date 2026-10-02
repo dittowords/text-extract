@@ -127,6 +127,7 @@ const TAG_NAME = ["entity.name.tag"];
 const ATTR_NAME = ["entity.other.attribute-name"];
 const ATTR_LIST = ["meta.tag.attributes", "meta.attribute"]; // `meta.tag` alone also wraps JSX children
 const MARKUP_TEXT_LAST = ["meta.jsx.children", "text."]; // the token's innermost scope
+const JSX_CHILDREN = ["meta.jsx.children"]; // a `{hole}` here is part of the text node, as in a template
 const MARKUP_TEXT_ANY = ["constant.character.entity"]; // `&amp;` belongs to the text node
 const RAW_STRING = ["string.quoted.raw"];
 const RAW_STRING_PREFIX = /^(?:"""|#+"|@"|[rR]["'])/; // kotlin/python, swift, c#, python
@@ -346,10 +347,10 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
         continue;
       }
 
-      // Text node, or a hole that opens one (`<p>{{ __('x') }} more</p>`).
+      // Text node, or a hole that opens one (`<p>{{ __('x') }} more</p>`, `<p>{" "}more</p>`).
       const opensText =
         isMarkupText(s) ||
-        (markupGrammar && isHoleOpen(s, tok.text) && !anyOf(s, EMBEDDED_BLOCK) && lastIndex(s, ATTR_LIST) === -1);
+        ((markupGrammar || anyOf(s, JSX_CHILDREN)) && isHoleOpen(s, tok.text) && !anyOf(s, EMBEDDED_BLOCK) && lastIndex(s, ATTR_LIST) === -1);
       if (opensText) {
         if (!run) run = { kind: "text", tokens: [], context: { parentRole: "markup_text", identifiers: [] } };
         if (isHoleOpen(s, tok.text)) holeStart = run.tokens.length;

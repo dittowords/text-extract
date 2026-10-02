@@ -277,17 +277,21 @@ const GAP_TO_NEXT_MAX = 200;
  * position), or null when they are far apart or a blank line separates them.
  * A `+` between two literals, an inline tag, or a `{hole}` all fit in a short
  * gap; two unrelated strings usually do not. The server decides which it is.
+ *
+ * A hit nested inside another's span (the `" "` of a JSX `{" "}` spacer, a
+ * literal inside a template hole) is part of that span already, so the next
+ * hit is the first one that starts after the span ends.
  */
 export function gapsToNext(hits: readonly Pick<ExtractedHit, "location" | "snapshotText">[], source: string): (string | null)[] {
   const lineStarts = [0];
   for (let i = 0; i < source.length; i++) if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
   const offset = (h: Pick<ExtractedHit, "location">) => lineStarts[h.location.line - 1] + h.location.column - 1;
   return hits.map((hit, i) => {
-    const next = hits[i + 1];
-    if (!next) return null;
     const from = offset(hit) + hit.snapshotText.length;
+    const next = hits.slice(i + 1).find((h) => offset(h) >= from);
+    if (!next) return null;
     const to = offset(next);
-    if (to < from || to - from > GAP_TO_NEXT_MAX) return null;
+    if (to - from > GAP_TO_NEXT_MAX) return null;
     const gap = source.slice(from, to);
     return /\n\s*\n/.test(gap) ? null : gap;
   });

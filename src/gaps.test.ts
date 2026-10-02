@@ -9,6 +9,12 @@ describe("gapsToNext", () => {
     expect(gapsToNext(hits, source)).toEqual([" + name + ", null, ';\nconst c = ', null]);
   });
 
+  test("a hit nested in the previous span is skipped over", () => {
+    const source = `<p>Read the terms on{" "}<a>GitHub</a>.</p>`;
+    const hits = [hit(1, 4, 'Read the terms on{" "}'), hit(1, 22, '" "'), hit(1, 29, "GitHub"), hit(1, 39, ".")];
+    expect(gapsToNext(hits, source)).toEqual(["<a>", "}<a>", "</a>", null]);
+  });
+
   test("a gap longer than the limit is null", () => {
     const filler = "x".repeat(300);
     const source = `"a"; ${filler}; "b"`;
