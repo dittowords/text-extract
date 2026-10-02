@@ -1,4 +1,6 @@
-import type { DittoScanEnclosingContext } from "../types";
+import type { DittoScanEnclosingContext, DittoScanPiece } from "../types";
+
+export type HitPiece = DittoScanPiece;
 
 export interface ExtractedHit {
   value: string;
@@ -17,6 +19,10 @@ export interface ExtractedHit {
   // (.xcstrings). When set, it wins over the file-level locale derived
   // from the path.
   localeKey?: string;
+  // Set by the composer when the value was assembled from fragments and
+  // holes. Each piece keeps its own location, so write-back can regenerate
+  // the expression. Absent on a plain single literal.
+  pieces?: HitPiece[];
 }
 
 // Escape hatch for languages that don't fit the engine's spec-driven path

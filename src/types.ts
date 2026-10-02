@@ -54,6 +54,19 @@ export interface DittoScanEnclosingContext {
   parentTag?: string;
 }
 
+// One part of a composed value: a literal slice of source, or an expression
+// rendered as a `{{name}}` placeholder.
+export const DittoScanPieceSchema = z.object({
+  kind: z.enum(["literal", "placeholder"]),
+  // Verbatim source text of the piece.
+  text: z.string(),
+  // Placeholder name as it appears in the composed value.
+  name: z.string().optional(),
+  line: z.number().int().positive(),
+  column: z.number().int().positive(),
+});
+export type DittoScanPiece = z.infer<typeof DittoScanPieceSchema>;
+
 export const DittoScanEnclosingContextSchema = z.object({
   parentRole: DittoScanDetectionKindSchema,
   identifiers: z.array(z.string()),
@@ -110,5 +123,7 @@ export const DittoScanCandidateSchema = z.object({
   // The extractor's view of the wrapping construct. The server's rule
   // classifier runs only when this is present (DIT-13628).
   enclosing_context: DittoScanEnclosingContextSchema.optional(),
+  // Present when `value_raw` was composed from several source pieces.
+  pieces: z.array(DittoScanPieceSchema).optional(),
 });
 export type DittoScanCandidate = z.infer<typeof DittoScanCandidateSchema>;

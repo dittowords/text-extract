@@ -316,6 +316,7 @@ export async function extractFromResolvedFile(args: {
       context_identifiers: hit.context.identifiers,
       usage_evidence: null,
       enclosing_context: hit.context,
+      ...(hit.pieces ? { pieces: hit.pieces } : {}),
     });
   }
 

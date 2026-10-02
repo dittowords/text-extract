@@ -6,6 +6,7 @@ import { INITIAL, Registry, type IGrammar, type IToken, type StateStack } from "
 
 import type { DittoScanEnclosingContext } from "../../types";
 import type { ExtractedHit, LanguageExtractor } from "../types";
+import { composeHits } from "./compose";
 import { decodeEscapes } from "./util";
 
 /**
@@ -587,5 +588,5 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
  * grammar-backed language.
  */
 export const textmateExtractor: LanguageExtractor = {
-  extract: ({ source, kind }) => extractWithGrammar(source, kind),
+  extract: async ({ source, kind }) => composeHits(await extractWithGrammar(source, kind), source),
 };
