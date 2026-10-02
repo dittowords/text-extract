@@ -6,11 +6,11 @@
  */
 
 import { fallbackExtractor } from "./lang/extractors/fallback";
-import { textmateExtractor } from "./lang/extractors/textmate";
+import { grammarExtractor } from "./lang/extractors/grammar";
 
 const BUDGET_MS = 10_000;
 
-const tsxExtractor = textmateExtractor;
+const tsxExtractor = grammarExtractor;
 
 function timed(label: string, run: () => Promise<unknown>) {
   it(`${label} finishes well inside the budget`, async () => {

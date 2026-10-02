@@ -1,8 +1,8 @@
-import { extractWithGrammar } from "./textmate";
+import { extractWithGrammar } from "./grammar";
 
 const values = (hits: { value: string }[]) => hits.map((h) => h.value);
 
-describe("textmate extractor", () => {
+describe("grammar extractor", () => {
   test("python: skips comments, keeps f-string holes and multi-line strings", async () => {
     const hits = await extractWithGrammar(
       ['# "not a string"', 'msg = f"Hello {name}, you have {n} items"', 'x = """multi', 'line "quoted" text"""', "print('done')", ""].join(

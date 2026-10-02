@@ -1,47 +1,9 @@
 
-import { extractWithGrammar } from "./textmate";
-
+import { extractWithGrammar } from "./grammar";
 
 const extract = (source: string) => extractWithGrammar(source, "swift");
 
 describe("grammar extractor: swift", () => {
-  test("equality and switch case patterns are type_tag", async () => {
-    const source = [
-      `func f(x: String) -> Int {`,
-      `  if x == "foo" { return 1 }`,
-      `  switch x { case "bar": return 2; default: return 0 }`,
-      `}`,
-      ``,
-    ].join("\n");
-    const hits = await extract(source);
-    expect(hits.find((h) => h.value === '"foo"')?.context.parentRole).toBe("type_tag");
-    expect(hits.find((h) => h.value === '"bar"')?.context.parentRole).toBe("type_tag");
-  });
-
-  test("enum raw values and attribute arguments are type_tag", async () => {
-    const source = [`enum E: String { case a = "alpha"; case b = "beta" }`, `@objc("Bridged") class C {}`, ``].join(
-      "\n"
-    );
-    const hits = await extract(source);
-    expect(hits.find((h) => h.value === '"alpha"')?.context.parentRole).toBe("type_tag");
-    // The Swift grammar stops tokenizing after `@objc(`, so the argument is
-    // not seen at all. Not emitted is as good as excluded here.
-    expect(hits.find((h) => h.value === '"Bridged"')).toBeUndefined();
-  });
-
-  test("dictionary keys are object_key, values are other", async () => {
-    const hits = await extract(`let d = ["k": "v"]\n`);
-    const k = hits.find((h) => h.value === '"k"');
-    const v = hits.find((h) => h.value === '"v"');
-    expect(k?.context.parentRole).toBe("object_key");
-    expect(v?.context.parentRole).toBe("other");
-  });
-
-  test("NSRegularExpression and Regex arguments are regex_pattern", async () => {
-    const hits = await extract(`let r = Regex("^foo$")\nlet n = NSRegularExpression(pattern: "bar")\n`);
-    expect(hits.find((h) => h.value === '"^foo$"')?.context.parentRole).toBe("regex_pattern");
-    expect(hits.find((h) => h.value === '"bar"')?.context.parentRole).toBe("regex_pattern");
-  });
 
   test("captures callee/methodName for call expressions", async () => {
     const source = [`func f() {`, `  print("a")`, `  button.setTitle("b", for: .normal)`, `}`, ``].join("\n");

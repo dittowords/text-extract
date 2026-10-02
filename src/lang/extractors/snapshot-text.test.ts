@@ -9,7 +9,7 @@ import { propertiesExtractor } from "./properties";
 import { resxExtractor } from "./resx";
 import { stringsExtractor } from "./strings";
 import { stringsdictExtractor } from "./stringsdict";
-import { textmateExtractor } from "./textmate";
+import { grammarExtractor } from "./grammar";
 import { xcstringsExtractor } from "./xcstrings";
 import { xliffExtractor } from "./xliff";
 import { yamlI18nExtractor } from "./yaml-i18n";
@@ -22,7 +22,7 @@ const cases: {
 }[] = [
   {
     name: "javascript",
-    extractor: textmateExtractor,
+    extractor: grammarExtractor,
     kind: "tsx",
     source: `
       const re = "^foo$";
@@ -38,7 +38,7 @@ const cases: {
   },
   {
     name: "html-markup",
-    extractor: textmateExtractor,
+    extractor: grammarExtractor,
     kind: "html",
     source: `
       <p>Welcome home</p>
@@ -48,7 +48,7 @@ const cases: {
   },
   {
     name: "vue",
-    extractor: textmateExtractor,
+    extractor: grammarExtractor,
     kind: "vue",
     source: `
       <template>
@@ -61,7 +61,7 @@ const cases: {
   },
   {
     name: "kotlin",
-    extractor: textmateExtractor,
+    extractor: grammarExtractor,
     kind: "kotlin",
     source: `
       val greeting = "Don't stop\\nnow"
@@ -71,7 +71,7 @@ const cases: {
   },
   {
     name: "swift",
-    extractor: textmateExtractor,
+    extractor: grammarExtractor,
     kind: "swift",
     source: `
       let greeting = "Don't stop\\nnow"
@@ -332,7 +332,7 @@ function allOccurrences(haystack: string, needle: string): number[] {
 }
 
 describe("snapshotText keeps what the value drops", () => {
-  const tsx = textmateExtractor;
+  const tsx = grammarExtractor;
 
   test("keeps escape sequences the value decodes", async () => {
     const source = `const message = "Line one\\nLine two";`;

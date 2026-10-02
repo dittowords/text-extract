@@ -1,6 +1,6 @@
 import { INITIAL, type IToken, type StateStack } from "vscode-textmate";
 
-import { loadGrammar } from "./textmate";
+import { loadGrammar } from "./grammar";
 
 /**
  * XML tree for the resource-file extractors, built from the TextMate XML

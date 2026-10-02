@@ -1,4 +1,4 @@
-import { extractWithGrammar } from "./textmate";
+import { extractWithGrammar } from "./grammar";
 
 
 const extract = (source: string) => extractWithGrammar(source, "vue");

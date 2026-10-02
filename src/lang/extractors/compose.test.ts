@@ -1,4 +1,4 @@
-import { extractWithGrammar } from "./textmate";
+import { extractWithGrammar } from "./grammar";
 import { composeHits, placeholderName } from "./compose";
 
 const run = async (src: string, lang: string) => composeHits(await extractWithGrammar(src, lang), src);

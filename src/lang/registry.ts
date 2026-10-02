@@ -7,7 +7,7 @@ import { propertiesExtractor } from "./extractors/properties";
 import { resxExtractor } from "./extractors/resx";
 import { stringsExtractor } from "./extractors/strings";
 import { stringsdictExtractor } from "./extractors/stringsdict";
-import { textmateExtractor } from "./extractors/textmate";
+import { grammarExtractor } from "./extractors/grammar";
 import { xcstringsExtractor } from "./extractors/xcstrings";
 import { xliffExtractor } from "./extractors/xliff";
 import { yamlI18nExtractor } from "./extractors/yaml-i18n";
@@ -43,37 +43,37 @@ function isAndroidResource(relPath: string): boolean {
 export const LANGUAGES: readonly Language[] = [
   // Code and markup go through the grammar extractor; `id` is the
   // `tm-grammars` grammar name.
-  { id: "typescript", extensions: [".ts", ".cts", ".mts"], extractor: textmateExtractor },
-  { id: "tsx", extensions: [".tsx"], extractor: textmateExtractor },
-  { id: "javascript", extensions: [".js", ".cjs", ".mjs"], extractor: textmateExtractor },
-  { id: "jsx", extensions: [".jsx"], extractor: textmateExtractor },
-  { id: "html", extensions: [".html", ".htm"], extractor: textmateExtractor },
-  { id: "vue", extensions: [".vue"], extractor: textmateExtractor },
+  { id: "typescript", extensions: [".ts", ".cts", ".mts"], extractor: grammarExtractor },
+  { id: "tsx", extensions: [".tsx"], extractor: grammarExtractor },
+  { id: "javascript", extensions: [".js", ".cjs", ".mjs"], extractor: grammarExtractor },
+  { id: "jsx", extensions: [".jsx"], extractor: grammarExtractor },
+  { id: "html", extensions: [".html", ".htm"], extractor: grammarExtractor },
+  { id: "vue", extensions: [".vue"], extractor: grammarExtractor },
   // Kotlin grammar also handles .kts (Gradle scripts) and .ktm (Kotlin modules).
-  { id: "kotlin", extensions: [".kt", ".kts", ".ktm"], extractor: textmateExtractor },
-  { id: "swift", extensions: [".swift"], extractor: textmateExtractor },
-  { id: "python", extensions: [".py"], extractor: textmateExtractor },
-  { id: "go", extensions: [".go"], extractor: textmateExtractor },
-  { id: "ruby", extensions: [".rb"], extractor: textmateExtractor },
-  { id: "java", extensions: [".java"], extractor: textmateExtractor },
-  { id: "rust", extensions: [".rs"], extractor: textmateExtractor },
-  { id: "c", extensions: [".c", ".h"], extractor: textmateExtractor },
-  { id: "cpp", extensions: [".cc", ".cpp", ".hpp"], extractor: textmateExtractor },
-  { id: "objective-c", extensions: [".m"], extractor: textmateExtractor },
-  { id: "objective-cpp", extensions: [".mm"], extractor: textmateExtractor },
-  { id: "csharp", extensions: [".cs"], extractor: textmateExtractor },
+  { id: "kotlin", extensions: [".kt", ".kts", ".ktm"], extractor: grammarExtractor },
+  { id: "swift", extensions: [".swift"], extractor: grammarExtractor },
+  { id: "python", extensions: [".py"], extractor: grammarExtractor },
+  { id: "go", extensions: [".go"], extractor: grammarExtractor },
+  { id: "ruby", extensions: [".rb"], extractor: grammarExtractor },
+  { id: "java", extensions: [".java"], extractor: grammarExtractor },
+  { id: "rust", extensions: [".rs"], extractor: grammarExtractor },
+  { id: "c", extensions: [".c", ".h"], extractor: grammarExtractor },
+  { id: "cpp", extensions: [".cc", ".cpp", ".hpp"], extractor: grammarExtractor },
+  { id: "objective-c", extensions: [".m"], extractor: grammarExtractor },
+  { id: "objective-cpp", extensions: [".mm"], extractor: grammarExtractor },
+  { id: "csharp", extensions: [".cs"], extractor: grammarExtractor },
   // Laravel templates share the `.php` extension, so they go first.
-  { id: "blade", extensions: [".php"], extractor: textmateExtractor, pathMatches: (p) => /\.blade\.php$/i.test(p) },
-  { id: "php", extensions: [".php"], extractor: textmateExtractor },
-  { id: "lua", extensions: [".lua"], extractor: textmateExtractor },
-  { id: "dart", extensions: [".dart"], extractor: textmateExtractor },
-  { id: "svelte", extensions: [".svelte"], extractor: textmateExtractor },
-  { id: "astro", extensions: [".astro"], extractor: textmateExtractor },
-  { id: "handlebars", extensions: [".hbs"], extractor: textmateExtractor },
-  { id: "liquid", extensions: [".liquid"], extractor: textmateExtractor },
-  { id: "erb", extensions: [".erb"], extractor: textmateExtractor },
-  { id: "jinja-html", extensions: [".jinja", ".jinja2", ".j2", ".njk"], extractor: textmateExtractor },
-  { id: "twig", extensions: [".twig"], extractor: textmateExtractor },
+  { id: "blade", extensions: [".php"], extractor: grammarExtractor, pathMatches: (p) => /\.blade\.php$/i.test(p) },
+  { id: "php", extensions: [".php"], extractor: grammarExtractor },
+  { id: "lua", extensions: [".lua"], extractor: grammarExtractor },
+  { id: "dart", extensions: [".dart"], extractor: grammarExtractor },
+  { id: "svelte", extensions: [".svelte"], extractor: grammarExtractor },
+  { id: "astro", extensions: [".astro"], extractor: grammarExtractor },
+  { id: "handlebars", extensions: [".hbs"], extractor: grammarExtractor },
+  { id: "liquid", extensions: [".liquid"], extractor: grammarExtractor },
+  { id: "erb", extensions: [".erb"], extractor: grammarExtractor },
+  { id: "jinja-html", extensions: [".jinja", ".jinja2", ".j2", ".njk"], extractor: grammarExtractor },
+  { id: "twig", extensions: [".twig"], extractor: grammarExtractor },
   // iOS .lproj/ files — every locale flows through.
   { id: "ios_strings", extensions: [".strings"], extractor: stringsExtractor },
   { id: "ios_stringsdict", extensions: [".stringsdict"], extractor: stringsdictExtractor },

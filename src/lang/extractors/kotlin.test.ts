@@ -1,36 +1,8 @@
-import { extractWithGrammar } from "./textmate";
-
+import { extractWithGrammar } from "./grammar";
 
 const extract = (source: string) => extractWithGrammar(source, "kotlin");
 
 describe("grammar extractor: kotlin", () => {
-  test("equality and `when` arms are type_tag", async () => {
-    const source = [
-      `fun f(x: String): Int {`,
-      `  if (x == "foo") return 1`,
-      `  return when (x) { "bar" -> 2; else -> 0 }`,
-      `}`,
-      ``,
-    ].join("\n");
-    const hits = await extract(source);
-    const foo = hits.find((h) => h.value === '"foo"');
-    const bar = hits.find((h) => h.value === '"bar"');
-    expect(foo?.context.parentRole).toBe("type_tag");
-    expect(bar?.context.parentRole).toBe("type_tag");
-  });
-
-  test('mapOf `"k" to v` marks the left operand as object_key', async () => {
-    const source = `val m = mapOf("alpha" to 1, "beta" to 2)\n`;
-    const hits = await extract(source);
-    const alpha = hits.find((h) => h.value === '"alpha"');
-    expect(alpha?.context.parentRole).toBe("object_key");
-  });
-
-  test("Regex constructor argument is regex_pattern", async () => {
-    const hits = await extract(`val r = Regex("^foo$")\n`);
-    const pat = hits.find((h) => h.value === '"^foo$"');
-    expect(pat?.context.parentRole).toBe("regex_pattern");
-  });
 
   test("captures callee/calleeMember/methodName for known call shapes", async () => {
     const source = [

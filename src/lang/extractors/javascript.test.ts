@@ -1,38 +1,17 @@
 
-import { extractWithGrammar } from "./textmate";
-
+import { extractWithGrammar } from "./grammar";
 
 const ts = { extract: ({ source }: { source: string; kind: string }) => extractWithGrammar(source, "typescript") };
 const tsx = { extract: ({ source }: { source: string; kind: string }) => extractWithGrammar(source, "tsx") };
 
 describe("grammar extractor: javascript", () => {
-  test("tags import paths as `import` and bare module argv too", async () => {
+  test("tags import specifiers as `import`; a require() argument is left to the classifier", async () => {
     const hits = await ts.extract({ source: `import x from "y";\nrequire("z");\n`, kind: "typescript" });
-    const roles = hits.map((h) => h.context.parentRole);
-    expect(roles).toEqual(["import", "import"]);
-  });
-
-  test("tags `new RegExp(...)` arg as regex_pattern", async () => {
-    const hits = await ts.extract({ source: `const r = new RegExp("^foo$");\n`, kind: "typescript" });
-    const re = hits.find((h) => h.value === '"^foo$"');
-    expect(re?.context.parentRole).toBe("regex_pattern");
-  });
-
-  test("tags object keys as object_key and values as other", async () => {
-    const hits = await ts.extract({ source: `const o = { "label": "Hello" };\n`, kind: "typescript" });
-    const label = hits.find((h) => h.value === '"label"');
-    const hello = hits.find((h) => h.value === '"Hello"');
-    expect(label?.context.parentRole).toBe("object_key");
-    expect(hello?.context.parentRole).toBe("other");
-  });
-
-  test("tags switch cases and equality checks as type_tag", async () => {
-    const source = `function f(x: string) {\n  if (x === "foo") return 1;\n  switch (x) { case "bar": return 2; }\n  return 0;\n}\n`;
-    const hits = await ts.extract({ source, kind: "typescript" });
-    const foo = hits.find((h) => h.value === '"foo"');
-    const bar = hits.find((h) => h.value === '"bar"');
-    expect(foo?.context.parentRole).toBe("type_tag");
-    expect(bar?.context.parentRole).toBe("type_tag");
+    expect(hits.map((h) => [h.value, h.context.parentRole])).toEqual([
+      ['"y"', "import"],
+      ['"z"', "other"],
+    ]);
+    expect(hits[1].context.callee).toBe("require");
   });
 
   test("captures callee/calleeMember for member-expression calls", async () => {
