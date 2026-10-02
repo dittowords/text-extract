@@ -25,7 +25,6 @@ export {
   type SkipReason,
 } from "./extract-file";
 
-export { shouldEmit } from "./rules";
 
 export {
   walkCodebase,

@@ -4,18 +4,8 @@ import { z } from "zod";
 export const DittoScanStatusSchema = z.enum(["user-facing", "not-user-facing", "unsure", "error"]);
 export type DittoScanStatus = z.infer<typeof DittoScanStatusSchema>;
 
-// The syntactic site a string was found in. Kinds in the first group are
-// always excluded by `shouldEmit` and never appear on emitted candidates;
-// they exist so extractors and exclusion rules share a vocabulary.
+// The syntactic site a string was found in.
 export const DittoScanDetectionKindSchema = z.enum([
-  // Excluded by `shouldEmit`
-  "import",
-  "regex_pattern",
-  "object_key",
-  "index_access",
-  "type_tag",
-
-  // Emitted
   "markup_text", // text content of a JSX/HTML-like element
   "markup_attr", // value of an HTML-shaped attribute
   "resource_value", // value inside a localization resource file (strings.xml, .strings, .stringsdict, .xcstrings)
@@ -23,57 +13,18 @@ export const DittoScanDetectionKindSchema = z.enum([
 ]);
 export type DittoScanDetectionKind = z.infer<typeof DittoScanDetectionKindSchema>;
 
-// Produced by per-language extractors, consumed by `shouldEmit` and the
-// rule classifier. The parts the LLM phase sees are surfaced on Candidate as
-// `detection_kind` and `context_identifiers`; the optional fields are
-// internal-only hints used by the rule classifier.
+// Produced by the extractors. Surfaced on the candidate as `detection_kind`
+// and `context_identifiers`.
 export interface DittoScanEnclosingContext {
   parentRole: DittoScanDetectionKind;
   // Lowercased identifiers from the wrapping construct, in source order.
   // For `markup_attr` this is the attribute name; otherwise empty.
   identifiers: string[];
-  // Top-level identifier of the enclosing call expression, when the receiver
-  // is a bare identifier. Examples: `console` for `console.log(...)`, `Log`
-  // for `Log.d(...)`, `print` for `print(...)`. Unset when the receiver is
-  // not a bare identifier (e.g. `this.log.warn(...)`, `Logger().info(...)`).
-  callee?: string;
-  // Method side of a member-expression call. `log` for `console.log`, `d`
-  // for `Log.d`. Unset for bare-identifier calls like `print(...)`.
-  calleeMember?: string;
-  // Final method name on the enclosing call, regardless of receiver
-  // shape. Set for chained calls where `calleeMember` would not be:
-  // `AlertDialog.Builder(ctx).setTitle("X")` -> `setTitle`,
-  // `someLabel.setText("X")` -> `setText`. Distinct from `calleeMember`
-  // so reject rules (which want certainty about the receiver) can keep
-  // using `callee`/`calleeMember` while accept rules can match the
-  // method name on broader call shapes.
-  methodName?: string;
-  // Lowercased tag name of the JSX/Vue element wrapping a `markup_text`
-  // candidate. Used by the rule classifier to apply the parent-tag denylist
-  // (`<code>`, `<pre>`, etc.).
-  parentTag?: string;
 }
-
-// One part of a composed value: a literal slice of source, or an expression
-// rendered as a `{{name}}` placeholder.
-export const DittoScanPieceSchema = z.object({
-  kind: z.enum(["literal", "placeholder"]),
-  // Verbatim source text of the piece.
-  text: z.string(),
-  // Placeholder name as it appears in the composed value.
-  name: z.string().optional(),
-  line: z.number().int().positive(),
-  column: z.number().int().positive(),
-});
-export type DittoScanPiece = z.infer<typeof DittoScanPieceSchema>;
 
 export const DittoScanEnclosingContextSchema = z.object({
   parentRole: DittoScanDetectionKindSchema,
   identifiers: z.array(z.string()),
-  callee: z.string().optional(),
-  calleeMember: z.string().optional(),
-  methodName: z.string().optional(),
-  parentTag: z.string().optional(),
 }) satisfies z.ZodType<DittoScanEnclosingContext>;
 
 // One occurrence of the candidate string somewhere else in the codebase. Used
@@ -120,10 +71,12 @@ export const DittoScanCandidateSchema = z.object({
   source_context: z.string(),
   context_identifiers: z.array(z.string()),
   usage_evidence: z.array(DittoScanUsageEvidenceSchema).nullable().optional(),
-  // The extractor's view of the wrapping construct. The server's rule
-  // classifier runs only when this is present (DIT-13628).
+  // The extractor's view of the wrapping construct (DIT-13628).
   enclosing_context: DittoScanEnclosingContextSchema.optional(),
-  // Present when `value_raw` was composed from several source pieces.
-  pieces: z.array(DittoScanPieceSchema).optional(),
+  // The source between the end of this hit and the start of the next hit in
+  // the same file, when they are close: at most GAP_TO_NEXT_MAX characters
+  // and no blank line. The server asks whether the two read as one piece of
+  // copy and renders the joined value from the spans. Null otherwise.
+  gap_to_next: z.string().nullable(),
 });
 export type DittoScanCandidate = z.infer<typeof DittoScanCandidateSchema>;

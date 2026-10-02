@@ -4,7 +4,7 @@ const extract = (source: string) => extractWithGrammar(source, "kotlin");
 
 describe("grammar extractor: kotlin", () => {
 
-  test("captures callee/calleeMember/methodName for known call shapes", async () => {
+  test("emits every literal with its position, whatever call it sits in", async () => {
     const source = [
       `fun f() {`,
       `  println("a")`,
@@ -14,13 +14,11 @@ describe("grammar extractor: kotlin", () => {
       ``,
     ].join("\n");
     const hits = await extract(source);
-    const a = hits.find((h) => h.value === '"a"');
-    const b = hits.find((h) => h.value === '"b"');
-    const c = hits.find((h) => h.value === '"c"');
-    expect(a?.context).toMatchObject({ parentRole: "other", callee: "println" });
-    expect(b?.context).toMatchObject({ parentRole: "other", callee: "Log", calleeMember: "d", methodName: "d" });
-    expect(c?.context).toMatchObject({ parentRole: "other", methodName: "setTitle" });
-    expect(c?.context.callee).toBeUndefined();
+    expect(hits.map((h) => [h.value, h.location.line, h.context.parentRole])).toEqual([
+      ['"a"', 2, "other"],
+      ['"b"', 3, "other"],
+      ['"c"', 4, "other"],
+    ]);
   });
 });
 

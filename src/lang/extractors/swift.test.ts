@@ -5,16 +5,13 @@ const extract = (source: string) => extractWithGrammar(source, "swift");
 
 describe("grammar extractor: swift", () => {
 
-  test("captures callee/methodName for call expressions", async () => {
+  test("emits every literal in call expressions", async () => {
     const source = [`func f() {`, `  print("a")`, `  button.setTitle("b", for: .normal)`, `}`, ``].join("\n");
     const hits = await extract(source);
-    expect(hits.find((h) => h.value === '"a"')?.context).toMatchObject({ parentRole: "other", callee: "print" });
-    expect(hits.find((h) => h.value === '"b"')?.context).toMatchObject({
-      parentRole: "other",
-      callee: "button",
-      calleeMember: "setTitle",
-      methodName: "setTitle",
-    });
+    expect(hits.map((h) => [h.value, h.location.line])).toEqual([
+      ['"a"', 2],
+      ['"b"', 3],
+    ]);
   });
 });
 

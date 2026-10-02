@@ -6,7 +6,6 @@ import { INITIAL, Registry, type IGrammar, type IToken, type StateStack } from "
 
 import type { DittoScanEnclosingContext } from "../../types";
 import type { ExtractedHit, LanguageExtractor } from "../types";
-import { composeHits } from "./compose";
 import { decodeEscapes } from "./util";
 
 /**
@@ -15,22 +14,23 @@ import { decodeEscapes } from "./util";
  * a new client language is a row in the registry, not a new file.
  *
  * A grammar labels spans with scopes such as `string.quoted.double`,
- * `comment.line`, `meta.embedded` or `meta.jsx.children`. It does not say
- * where a string ends, which tag a text node is in, or which call an
- * argument belongs to. This file is that structure layer:
+ * `meta.embedded` or `meta.jsx.children`. This file turns those labels into
+ * hits and nothing more:
  *   - a run of string-scoped tokens is one literal, interpolation holes included
  *   - a run of text-scoped tokens between tags is one markup text node, holes included
- *   - a string under an attribute scope is `markup_attr`
- *   - the identifier tokens before the enclosing `(` give `callee`/`calleeMember`/`methodName`
+ *   - a string under an attribute scope is `markup_attr` with the attribute name
+ *
+ * Every hit is emitted with its exact span. Which hits are copy, which
+ * neighbours read as one sentence, and what a placeholder is called are
+ * decided on the server, where the classifier can read the source around
+ * the span. Nothing here filters, joins, or names.
  *
  * Scope names are a convention, not a spec, so the per-grammar variations
- * live in the tables under "Scope tables". Everything the grammar cannot
- * state (is this `===` operand a tag? is this a dictionary key?) is left to
- * the classifier.
+ * live in the tables under "Scope tables".
  *
  * Value convention: a code literal keeps its delimiters with escapes
  * decoded, a raw string is left alone, an HTML attribute value is bare, and
- * markup text is composed by `compose.ts`.
+ * markup text is the verbatim slice.
  */
 
 // ---------------------------------------------------------------------------
@@ -130,23 +130,12 @@ const MARKUP_TEXT_LAST = ["meta.jsx.children", "text."]; // the token's innermos
 const MARKUP_TEXT_ANY = ["constant.character.entity"]; // `&amp;` belongs to the text node
 const RAW_STRING = ["string.quoted.raw"];
 const RAW_STRING_PREFIX = /^(?:"""|#+"|@"|[rR]["'])/; // kotlin/python, swift, c#, python
-const EXCLUDED_ROLE: Array<[string, DittoScanEnclosingContext["parentRole"]]> = [
-  ["meta.import", "import"],
-  ["meta.type", "type_tag"],
-  ["meta.interface", "type_tag"],
-];
-// Markup elements whose text is code; `parentTag` is withheld inside them.
-const CODE_LIKE_TAGS = new Set(["pre", "code", "kbd", "samp", "var", "script", "style"]);
-// Vue/Alpine/Angular bindings: the value is an expression, not copy.
-const DIRECTIVE_ATTR = /^[:@#]|^v-|^\*|^\[|^\(|^bind-|^on-|^x-/;
 // Grammars whose root is a document: text nodes carry copy, attribute values are bare.
 const MARKUP_GRAMMARS = new Set(["html", "vue", "svelte", "astro", "blade", "erb", "liquid", "handlebars", "jinja-html", "twig"]);
-// Component formats keep their `<script>` code; plain templates do not.
-const KEEPS_SCRIPT = new Set(["vue", "svelte", "astro"]);
-// A Django or Jinja template usually arrives as `.html`. The Jinja grammar
-// knows `{% %}` and `{{ }}`; the plain HTML grammar reads them as text.
-const DJANGO_TAG = /\{%[\s\S]*?%\}/;
-const grammarFor = (lang: string, source: string) => (lang === "html" && DJANGO_TAG.test(source) ? "jinja-html" : lang);
+// A template usually arrives as `.html`. The Jinja grammar tokenizes `{{ }}`
+// and `{% %}`; the plain HTML grammar reads them as text.
+const TEMPLATE_SYNTAX = /\{[{%]/;
+const grammarFor = (lang: string, source: string) => (lang === "html" && TEMPLATE_SYNTAX.test(source) ? "jinja-html" : lang);
 
 const anyOf = (scopes: string[], prefixes: string[]) => scopes.some((s) => prefixes.some((p) => s.startsWith(p)));
 const firstIndex = (scopes: string[], prefixes: string[]) => scopes.findIndex((s) => prefixes.some((p) => s.startsWith(p)));
@@ -181,30 +170,20 @@ const inAttrValue = (s: string[]) => lastIndex(s, ATTR_LIST) > lastIndex(s, HOLE
 const isMarkupText = (s: string[]) =>
   MARKUP_TEXT_LAST.some((p) => s[s.length - 1].startsWith(p)) || anyOf(s, MARKUP_TEXT_ANY);
 const isRawString = (s: string[], text: string) => anyOf(s, RAW_STRING) || RAW_STRING_PREFIX.test(text);
-const excludedRole = (s: string[]) => EXCLUDED_ROLE.find(([p]) => anyOf(s, [p]))?.[1] ?? null;
 
 // ---------------------------------------------------------------------------
 // Tokenizer walk
 // ---------------------------------------------------------------------------
 
 type Tok = { text: string; scopes: string[]; line: number; column: number; literal?: boolean };
-type CallContext = Pick<DittoScanEnclosingContext, "callee" | "calleeMember" | "methodName">;
 type Run = {
   kind: "string" | "text";
   tokens: Tok[];
   context: DittoScanEnclosingContext;
-  // HTML attribute values are emitted without quotes; a directive's value is
-  // scanned for literals; a bare JSX attribute keeps its backslashes.
+  // HTML attribute values are emitted without quotes; a JSX attribute keeps its backslashes.
   bareAttr?: boolean;
-  directive?: boolean;
   jsxAttr?: boolean;
-  // A text run whose holes held tokenized string literals.
-  hadNested?: boolean;
 };
-
-const IDENT_RE = /^[A-Za-z_$][\w$]*$/;
-const WORD_RE = /[A-Za-z_$][\w$]*|[().{]/g;
-const QUOTED_LITERAL = /(["'`])((?:(?!\1)[^\\\n]|\\.)*)\1/g;
 
 function stripDelimiters(raw: string): string {
   // `f"..."`, `$"..."`, `@"..."`, `r'...'`, `"""..."""`, `` `...` ``
@@ -226,63 +205,25 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
   let stack: StateStack | null = INITIAL;
   let run: Run | null = null;
   // A string literal inside a hole of a markup text run (`{t("x")}`) is
-  // emitted on its own as well, so key references are not lost.
+  // emitted on its own as well as inside the text node's span.
   let nested: Run | null = null;
   let pendingNewline = false;
   // Index into `run.tokens` where the current hole began, so a hole that
   // turns out to be nested markup or spans lines can be cut off.
   let holeStart = -1;
-  // Rolling buffer of identifiers and `.`/`(`/`{` from code tokens, to
-  // recover `receiver.method(` before a string.
-  const words: string[] = [];
-  const callStack: CallContext[] = [];
-  const tagStack: string[] = [];
-  let closingTag = false;
-  let selfClosing = false;
   let lastAttr: string | null = null;
+  let prevText = "";
 
-  const parentTagContext = (): Pick<DittoScanEnclosingContext, "parentTag"> => {
-    const parentTag = tagStack[tagStack.length - 1];
-    return parentTag && !tagStack.some((t) => CODE_LIKE_TAGS.has(t)) ? { parentTag } : {};
-  };
   const pushHit = (value: string, raw: string, first: Tok, context: DittoScanEnclosingContext) => {
     out.push({ value, snapshotText: raw, location: { line: first.line, column: first.column }, context });
   };
 
-  // Literals the grammar does not tokenize: inside a `{{ ... }}` hole of a
-  // plain HTML or Vue text node, or inside a directive attribute's expression.
-  const emitInnerLiterals = (raw: string, first: Tok, context: DittoScanEnclosingContext, holesOnly: boolean) => {
-    const scan = (text: string, offset: number) => {
-      QUOTED_LITERAL.lastIndex = 0;
-      let m: RegExpExecArray | null;
-      while ((m = QUOTED_LITERAL.exec(text)) !== null) {
-        const at = offset + m.index;
-        const before = raw.slice(0, at);
-        const nl = before.lastIndexOf("\n");
-        const line = first.line + (before.match(/\n/g)?.length ?? 0);
-        const column = nl === -1 ? first.column + at : at - nl;
-        pushHit(m[2], m[0], { text: m[0], scopes: [], line, column }, { ...context });
-      }
-    };
-    if (!holesOnly) return scan(raw, 0);
-    const MUSTACHE = /\{\{([\s\S]*?)\}\}/g;
-    let h: RegExpExecArray | null;
-    while ((h = MUSTACHE.exec(raw)) !== null) scan(h[1], h.index + 2);
-  };
-
   const emit = (r: Run) => {
-    if (r.tokens.length === 0) return;
+    // A run of delimiters alone (`""`, the outer quotes of a Vue directive) holds no literal.
+    if (!r.tokens.some((t) => (r.kind === "text" ? t.literal : isStringBody(t.scopes)))) return;
     const raw = r.tokens.map((t) => t.text).join("");
     const first = r.tokens[0];
-    if (r.kind === "text") {
-      // Verbatim slice; `compose.ts` renders holes and collapses layout.
-      // A node that is only holes (`{count}`) carries no copy of its own,
-      // but the literals inside its holes still do.
-      if (r.tokens.some((t) => t.literal)) pushHit(raw, raw, first, r.context);
-      if (markupGrammar && !r.hadNested && raw.includes("{{")) emitInnerLiterals(raw, first, r.context, true);
-      return;
-    }
-    if (r.directive) return emitInnerLiterals(stripDelimiters(raw), { ...first, column: first.column + 1 }, r.context, false);
+    if (r.kind === "text") return pushHit(raw, raw, first, r.context);
     if (r.bareAttr) return pushHit(stripDelimiters(raw), raw, first, r.context);
     pushHit(r.jsxAttr || isRawString(first.scopes, raw) ? raw : decodeEscapes(raw), raw, first, r.context);
   };
@@ -311,35 +252,10 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
     r.tokens.push(tok);
   };
 
-  const noteWords = (text: string) => {
-    for (const m of text.matchAll(WORD_RE)) {
-      const w = m[0];
-      if (w === "(") {
-        const [c, b, a] = words.slice(-3);
-        const frame: CallContext = {};
-        if (a && IDENT_RE.test(a)) {
-          frame.methodName = a;
-          // `Log.d(` has a bare receiver; `Builder(ctx).setTitle(` does not.
-          if (b !== ".") frame.callee = a;
-          else if (c && IDENT_RE.test(c)) Object.assign(frame, { callee: c, calleeMember: a });
-        }
-        callStack.push(frame);
-      } else if (w === ")") {
-        callStack.pop();
-      }
-      words.push(w);
-      if (words.length > 4) words.shift();
-    }
-  };
-
   const startString = (tok: Tok): Run => {
     const s = tok.scopes;
-    const prevWord = words[words.length - 1];
     // `attr={"x"}` is an attribute value too; deeper expressions in the braces are code.
-    if (inAttrValue(s) || (prevWord === "{" && lastIndex(s, ATTR_LIST) !== -1)) {
-      if (lastAttr && DIRECTIVE_ATTR.test(lastAttr)) {
-        return { kind: "string", tokens: [tok], context: { parentRole: "other", identifiers: [] }, directive: true };
-      }
+    if (inAttrValue(s) || (prevText === "{" && lastIndex(s, ATTR_LIST) !== -1)) {
       return {
         kind: "string",
         tokens: [tok],
@@ -348,17 +264,8 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
         jsxAttr: !markupGrammar && inAttrValue(s),
       };
     }
-    const role = excludedRole(s);
-    const context: DittoScanEnclosingContext = role
-      ? { parentRole: role, identifiers: [] }
-      : { parentRole: "other", identifiers: [], ...(callStack[callStack.length - 1] ?? {}) };
-    return { kind: "string", tokens: [tok], context };
+    return { kind: "string", tokens: [tok], context: { parentRole: "other", identifiers: [] } };
   };
-
-  // `<style>` bodies never hold copy. `<script>` bodies in plain templates
-  // are skipped too; component formats keep theirs.
-  const skipsEmbeddedCode = (s: string[]) =>
-    anyOf(s, ["source.css"]) || (markupGrammar && !KEEPS_SCRIPT.has(lang) && anyOf(s, ["source.js", "source.ts"]));
 
   for (let li = 0; li < lines.length; li++) {
     const line = lines[li];
@@ -371,9 +278,10 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
       const s = tok.scopes;
       const done = () => {
         pendingNewline = false;
+        if (tok.text.trim() !== "") prevText = tok.text.trim();
       };
 
-      if (anyOf(s, ["comment."]) || anyOf(s, NOT_STRING) || skipsEmbeddedCode(s)) {
+      if (anyOf(s, ["comment."]) || anyOf(s, NOT_STRING)) {
         flush();
         done();
         continue;
@@ -401,7 +309,6 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
         } else if (hole && stringInsideHole(s) && (isStringBody(s) || isStringPunct(s))) {
           if (nested) append(nested, tok);
           else nested = startString(tok);
-          run.hadNested = true;
           append(run, tok);
           done();
           continue;
@@ -410,7 +317,6 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
           flushNested();
           if (hole || tok.text.trim() === "") {
             if (hole && isHoleOpen(s, tok.text) && holeStart < 0) holeStart = run.tokens.length;
-            noteWords(tok.text);
             append(run, tok);
             if (hole && isHoleClose(s, tok.text)) holeStart = -1;
             done();
@@ -430,20 +336,7 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
       // Markup structure.
       if (anyOf(s, TAG_PUNCT)) {
         flush();
-        if (tok.text.startsWith("<")) {
-          closingTag = tok.text.startsWith("</");
-          lastAttr = null;
-          selfClosing = false;
-        } else if (tok.text === "/>" || selfClosing) {
-          tagStack.pop();
-          selfClosing = false;
-        }
-        done();
-        continue;
-      }
-      if (anyOf(s, TAG_NAME)) {
-        if (closingTag) tagStack.pop();
-        else tagStack.push(tok.text.toLowerCase());
+        if (tok.text.startsWith("<")) lastAttr = null;
         done();
         continue;
       }
@@ -452,19 +345,13 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
         done();
         continue;
       }
-      // Grammars that split `/>` into `/` and `>`.
-      if (tok.text.trim() === "/" && tagStack.length > 0 && !closingTag && lastIndex(s, ATTR_LIST) !== -1) {
-        selfClosing = true;
-        done();
-        continue;
-      }
 
       // Text node, or a hole that opens one (`<p>{{ __('x') }} more</p>`).
       const opensText =
         isMarkupText(s) ||
-        (tagStack.length > 0 && isHoleOpen(s, tok.text) && !anyOf(s, EMBEDDED_BLOCK) && lastIndex(s, ATTR_LIST) === -1);
+        (markupGrammar && isHoleOpen(s, tok.text) && !anyOf(s, EMBEDDED_BLOCK) && lastIndex(s, ATTR_LIST) === -1);
       if (opensText) {
-        if (!run) run = { kind: "text", tokens: [], context: { parentRole: "markup_text", identifiers: [], ...parentTagContext() } };
+        if (!run) run = { kind: "text", tokens: [], context: { parentRole: "markup_text", identifiers: [] } };
         if (isHoleOpen(s, tok.text)) holeStart = run.tokens.length;
         if (isMarkupText(s) && tok.text.trim() !== "") tok.literal = true;
         append(run, tok);
@@ -474,7 +361,6 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
 
       // Plain code token.
       flush();
-      noteWords(tok.text);
       done();
     }
   }
@@ -488,5 +374,5 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
  * grammar-backed language.
  */
 export const grammarExtractor: LanguageExtractor = {
-  extract: async ({ source, kind }) => composeHits(await extractWithGrammar(source, kind), source),
+  extract: ({ source, kind }) => extractWithGrammar(source, kind),
 };

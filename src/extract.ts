@@ -6,7 +6,6 @@ import { createHash } from "crypto";
 import type { FileDiscoveryStats } from "./lang/file-discovery";
 import type { Language } from "./lang/registry";
 import type { ExtractedHit } from "./lang/types";
-import { shouldEmit } from "./rules";
 import {
   DittoScanDetectionKindSchema,
   type DittoScanCandidate,
@@ -271,6 +270,29 @@ export function assignOccurrenceIndexes(
   return indexes;
 }
 
+const GAP_TO_NEXT_MAX = 200;
+
+/**
+ * The source between each hit and the next one in `hits` (sorted by
+ * position), or null when they are far apart or a blank line separates them.
+ * A `+` between two literals, an inline tag, or a `{hole}` all fit in a short
+ * gap; two unrelated strings usually do not. The server decides which it is.
+ */
+export function gapsToNext(hits: readonly Pick<ExtractedHit, "location" | "snapshotText">[], source: string): (string | null)[] {
+  const lineStarts = [0];
+  for (let i = 0; i < source.length; i++) if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
+  const offset = (h: Pick<ExtractedHit, "location">) => lineStarts[h.location.line - 1] + h.location.column - 1;
+  return hits.map((hit, i) => {
+    const next = hits[i + 1];
+    if (!next) return null;
+    const from = offset(hit) + hit.snapshotText.length;
+    const to = offset(next);
+    if (to < from || to - from > GAP_TO_NEXT_MAX) return null;
+    const gap = source.slice(from, to);
+    return /\n\s*\n/.test(gap) ? null : gap;
+  });
+}
+
 /**
  * The extraction step for one resolved file, no I/O. Both `runExtract` and
  * `extractFile` route through here so there's only one copy of it. Extractor
@@ -293,8 +315,9 @@ export async function extractFromResolvedFile(args: {
   const lines = source.split(/\r?\n/);
   const candidates: DittoScanCandidate[] = [];
 
-  const emitted = hits.filter((hit) => shouldEmit(hit.value, hit.context));
+  const emitted = [...hits].sort((a, b) => a.location.line - b.location.line || a.location.column - b.location.column);
   const occurrenceIndexes = assignOccurrenceIndexes(emitted);
+  const gaps = gapsToNext(emitted, source);
 
   for (const [index, hit] of emitted.entries()) {
     candidates.push({
@@ -316,7 +339,7 @@ export async function extractFromResolvedFile(args: {
       context_identifiers: hit.context.identifiers,
       usage_evidence: null,
       enclosing_context: hit.context,
-      ...(hit.pieces ? { pieces: hit.pieces } : {}),
+      gap_to_next: gaps[index],
     });
   }
 

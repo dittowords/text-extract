@@ -13,7 +13,7 @@ describe("grammar extractor", () => {
     expect(values(hits)).toEqual(['f"Hello {name}, you have {n} items"', '"""multi\nline "quoted" text"""', "'done'"]);
     expect(hits[0].location).toEqual({ line: 2, column: 7 });
     expect(hits[1].location).toEqual({ line: 3, column: 5 });
-    expect(hits[2].context).toMatchObject({ callee: "print", methodName: "print" });
+    expect(hits[2].context).toEqual({ parentRole: "other", identifiers: [] });
   });
 
   test("tsx: jsx text keeps its holes, hole-only nodes are dropped, strings in holes are emitted", async () => {
@@ -26,20 +26,18 @@ describe("grammar extractor", () => {
       ['"k"', "other"],
     ]);
     expect(hits[0].context.identifiers).toEqual(["classname"]);
-    expect(hits[2].context.parentTag).toBe("b");
-    expect(hits[3].context).toMatchObject({ callee: "t" });
+    expect(hits[3].context).toEqual({ parentRole: "other", identifiers: [] });
   });
 
-  test("kotlin: grammar without quote punctuation still yields clean values and callee", async () => {
+  test("kotlin: grammar without quote punctuation still yields clean values", async () => {
     const hits = await extractWithGrammar(`fun f() { Log.d("tag", "msg $name") }\n`, "kotlin");
     expect(values(hits)).toEqual(['"tag"', '"msg $name"']);
-    expect(hits[0].context).toMatchObject({ callee: "Log", calleeMember: "d", methodName: "d" });
   });
 
   test("blade: text node spans echo holes; the literal inside the hole is its own hit", async () => {
     const hits = await extractWithGrammar(`<p>{{ __('Hello') }}, {{ $user->name }}</p>\n<!-- "c" -->\n`, "blade");
     expect(values(hits)).toEqual(["{{ __('Hello') }}, {{ $user->name }}", "'Hello'"]);
-    expect(hits[0].context).toMatchObject({ parentRole: "markup_text", parentTag: "p" });
+    expect(hits[0].context).toEqual({ parentRole: "markup_text", identifiers: [] });
   });
 
   test("svelte: text nodes with holes, script strings as other", async () => {

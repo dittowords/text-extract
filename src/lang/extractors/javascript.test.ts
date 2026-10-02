@@ -1,56 +1,36 @@
-
 import { extractWithGrammar } from "./grammar";
 
 const ts = { extract: ({ source }: { source: string; kind: string }) => extractWithGrammar(source, "typescript") };
 const tsx = { extract: ({ source }: { source: string; kind: string }) => extractWithGrammar(source, "tsx") };
 
 describe("grammar extractor: javascript", () => {
-  test("tags import specifiers as `import`; a require() argument is left to the classifier", async () => {
-    const hits = await ts.extract({ source: `import x from "y";\nrequire("z");\n`, kind: "typescript" });
-    expect(hits.map((h) => [h.value, h.context.parentRole])).toEqual([
-      ['"y"', "import"],
-      ['"z"', "other"],
+  test("every literal is a hit; import paths and call arguments are left to the classifier", async () => {
+    const hits = await ts.extract({ source: `import x from "y";\nrequire("z");\nconsole.log("hi");\nt("welcome");\n`, kind: "typescript" });
+    expect(hits.map((h) => [h.value, h.context])).toEqual([
+      ['"y"', { parentRole: "other", identifiers: [] }],
+      ['"z"', { parentRole: "other", identifiers: [] }],
+      ['"hi"', { parentRole: "other", identifiers: [] }],
+      ['"welcome"', { parentRole: "other", identifiers: [] }],
     ]);
-    expect(hits[1].context.callee).toBe("require");
   });
 
-  test("captures callee/calleeMember for member-expression calls", async () => {
-    const hits = await ts.extract({ source: `console.log("hi");\nt("welcome");\n`, kind: "typescript" });
-    const hi = hits.find((h) => h.value === '"hi"');
-    const welcome = hits.find((h) => h.value === '"welcome"');
-    expect(hi?.context).toMatchObject({ parentRole: "other", callee: "console", calleeMember: "log" });
-    expect(welcome?.context).toMatchObject({ parentRole: "other", callee: "t" });
-    expect(welcome?.context.calleeMember).toBeUndefined();
-  });
-
-  test("emits jsx_text as markup_text with the enclosing tag", async () => {
-    const hits = await tsx.extract({
-      source: `const e = <button>Save</button>;\n`,
-      kind: "tsx",
-    });
-    const save = hits.find((h) => h.value.trim() === "Save");
-    expect(save?.context.parentRole).toBe("markup_text");
-    expect(save?.context.parentTag).toBe("button");
+  test("emits jsx text as markup_text with its verbatim span", async () => {
+    const hits = await tsx.extract({ source: `const e = <button>Save</button>;\n`, kind: "tsx" });
+    expect(hits).toEqual([
+      { value: "Save", snapshotText: "Save", location: { line: 1, column: 19 }, context: { parentRole: "markup_text", identifiers: [] } },
+    ]);
   });
 
   test("emits JSX attribute string as markup_attr with attribute name in identifiers", async () => {
-    const hits = await tsx.extract({
-      source: `const e = <input placeholder="Email" />;\n`,
-      kind: "tsx",
-    });
+    const hits = await tsx.extract({ source: `const e = <input placeholder="Email" />;\n`, kind: "tsx" });
     const email = hits.find((h) => h.value === '"Email"');
     expect(email?.context.parentRole).toBe("markup_attr");
     expect(email?.context.identifiers).toEqual(["placeholder"]);
   });
 
-  test("suppresses parentTag inside code-shaped JSX ancestors", async () => {
-    const hits = await tsx.extract({
-      source: `const e = <pre><span>npm install</span></pre>;\n`,
-      kind: "tsx",
-    });
-    const inner = hits.find((h) => h.value.trim() === "npm install");
-    expect(inner?.context.parentRole).toBe("markup_text");
-    expect(inner?.context.parentTag).toBeUndefined();
+  test("text inside <pre> is still a hit; the classifier reads the tag from the source", async () => {
+    const hits = await tsx.extract({ source: `const e = <pre><span>npm install</span></pre>;\n`, kind: "tsx" });
+    expect(hits.map((h) => h.value)).toEqual(["npm install"]);
   });
 });
 

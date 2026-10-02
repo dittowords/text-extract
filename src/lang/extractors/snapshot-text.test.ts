@@ -357,13 +357,15 @@ describe("snapshotText keeps what the value drops", () => {
     expect(hits[0]?.snapshotText).toBe("`Hi ${firstName}, welcome`");
   });
 
-  test("spans the inline markup a composed JSX text run reads through", async () => {
+  test("an inline tag ends a JSX text run; the server joins the pieces", async () => {
     const source = `const a = <p>Read the <b>docs</b> first</p>;`;
     const hits = await tsx.extract({ source, kind: "tsx" });
-    const run = hits.find((h) => h.value.includes("Read the"));
 
-    expect(run?.value).toBe("Read the docs first");
-    expect(run?.snapshotText).toBe("Read the <b>docs</b> first");
+    expect(hits.map((h) => [h.value, h.snapshotText])).toEqual([
+      ["Read the ", "Read the "],
+      ["docs", "docs"],
+      [" first", " first"],
+    ]);
   });
 });
 
