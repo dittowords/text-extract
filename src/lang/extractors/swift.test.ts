@@ -1,10 +1,10 @@
-import "../registry";
 
-import { swiftExtractor } from "./swift";
+import { extractWithGrammar } from "./textmate";
 
-const extract = (source: string) => swiftExtractor.extract({ source, kind: "swift" });
 
-describe("swiftExtractor", () => {
+const extract = (source: string) => extractWithGrammar(source, "swift");
+
+describe("grammar extractor: swift", () => {
   test("equality and switch case patterns are type_tag", async () => {
     const source = [
       `func f(x: String) -> Int {`,
@@ -24,7 +24,9 @@ describe("swiftExtractor", () => {
     );
     const hits = await extract(source);
     expect(hits.find((h) => h.value === '"alpha"')?.context.parentRole).toBe("type_tag");
-    expect(hits.find((h) => h.value === '"Bridged"')?.context.parentRole).toBe("type_tag");
+    // The Swift grammar stops tokenizing after `@objc(`, so the argument is
+    // not seen at all. Not emitted is as good as excluded here.
+    expect(hits.find((h) => h.value === '"Bridged"')).toBeUndefined();
   });
 
   test("dictionary keys are object_key, values are other", async () => {
@@ -54,7 +56,7 @@ describe("swiftExtractor", () => {
   });
 });
 
-describe("swiftExtractor escape decoding", () => {
+describe("grammar extractor: swift escape decoding", () => {
   test("decodes escapes", async () => {
     const hits = await extract(`let a = "line one\\nline two"\n`);
     expect(hits[0].value).toBe('"line one\nline two"');

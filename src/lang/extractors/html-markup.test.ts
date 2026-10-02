@@ -1,8 +1,8 @@
-import { htmlMarkupExtractor } from "./html-markup";
+import { extractWithGrammar } from "./textmate";
 
-const extract = (source: string) => htmlMarkupExtractor.extract({ source, kind: "html" });
+const extract = (source: string) => extractWithGrammar(source, "html");
 
-describe("htmlMarkupExtractor", () => {
+describe("grammar extractor: html", () => {
   test("emits element text as markup_text tagged with its parent tag", async () => {
     const hits = await extract(`<p>Welcome home</p>\n`);
     const text = hits.find((h) => h.value.trim() === "Welcome home");

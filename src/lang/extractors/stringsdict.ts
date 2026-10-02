@@ -1,4 +1,4 @@
-import { Lang, parse, type SgNode } from "@ast-grep/napi";
+import { parseXml, type XmlNode } from "./xml-dom";
 
 import type { ExtractedHit, LanguageExtractor } from "../types";
 import { innerText } from "./xml";
@@ -43,7 +43,7 @@ const USER_FACING_KEYS: ReadonlySet<string> = new Set([
 
 export const stringsdictExtractor: LanguageExtractor = {
   async extract({ source }) {
-    const root = parse(Lang.Html, source).root();
+    const root = await parseXml(source);
     const out: ExtractedHit[] = [];
 
     for (const dict of root.findAll({ rule: { kind: "element" } })) {
@@ -57,7 +57,7 @@ export const stringsdictExtractor: LanguageExtractor = {
   },
 };
 
-function walkDict(dictEl: SgNode, path: string[], out: ExtractedHit[]): void {
+function walkDict(dictEl: XmlNode, path: string[], out: ExtractedHit[]): void {
   const items = dictEl.children().filter((c) => c.kind() === "element");
   for (let i = 0; i + 1 < items.length; i += 2) {
     const keyEl = items[i];
@@ -85,7 +85,7 @@ function walkDict(dictEl: SgNode, path: string[], out: ExtractedHit[]): void {
   }
 }
 
-function tagName(el: SgNode): string | null {
+function tagName(el: XmlNode): string | null {
   const start = el.children().find((c) => c.kind() === "start_tag");
   return (
     start
@@ -95,7 +95,7 @@ function tagName(el: SgNode): string | null {
   );
 }
 
-function hasAncestorTag(node: SgNode, name: string): boolean {
+function hasAncestorTag(node: XmlNode, name: string): boolean {
   for (let cur = node.parent(); cur; cur = cur.parent()) {
     if (cur.kind() === "element" && tagName(cur) === name) return true;
   }

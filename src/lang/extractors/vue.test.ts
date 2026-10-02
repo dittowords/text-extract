@@ -1,8 +1,9 @@
-import { vueExtractor } from "./vue";
+import { extractWithGrammar } from "./textmate";
 
-const extract = (source: string) => vueExtractor.extract({ source, kind: "vue" });
 
-describe("vueExtractor", () => {
+const extract = (source: string) => extractWithGrammar(source, "vue");
+
+describe("grammar extractor: vue", () => {
   test("emits template text as markup_text and script literals as other", async () => {
     const source = [
       `<template>`,

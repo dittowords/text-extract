@@ -4,14 +4,13 @@
  * where the failure is a pinned CPU, not a wrong answer. Three-line unit tests
  * can't see it. Loose bound on purpose: a cliff detector, not a benchmark.
  */
-import { Lang } from "@ast-grep/napi";
 
 import { fallbackExtractor } from "./lang/extractors/fallback";
-import { javascriptExtractor } from "./lang/extractors/javascript";
+import { textmateExtractor } from "./lang/extractors/textmate";
 
 const BUDGET_MS = 10_000;
 
-const tsxExtractor = javascriptExtractor(Lang.Tsx);
+const tsxExtractor = textmateExtractor;
 
 function timed(label: string, run: () => Promise<unknown>) {
   it(`${label} finishes well inside the budget`, async () => {

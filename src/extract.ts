@@ -315,6 +315,7 @@ export async function extractFromResolvedFile(args: {
       source_context: buildSourceContext(lines, hit.location.line),
       context_identifiers: hit.context.identifiers,
       usage_evidence: null,
+      enclosing_context: hit.context,
     });
   }
 

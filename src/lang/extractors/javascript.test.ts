@@ -1,11 +1,11 @@
-import { Lang } from "@ast-grep/napi";
 
-import { javascriptExtractor } from "./javascript";
+import { extractWithGrammar } from "./textmate";
 
-const ts = javascriptExtractor(Lang.TypeScript);
-const tsx = javascriptExtractor(Lang.Tsx);
 
-describe("javascriptExtractor", () => {
+const ts = { extract: ({ source }: { source: string; kind: string }) => extractWithGrammar(source, "typescript") };
+const tsx = { extract: ({ source }: { source: string; kind: string }) => extractWithGrammar(source, "tsx") };
+
+describe("grammar extractor: javascript", () => {
   test("tags import paths as `import` and bare module argv too", async () => {
     const hits = await ts.extract({ source: `import x from "y";\nrequire("z");\n`, kind: "typescript" });
     const roles = hits.map((h) => h.context.parentRole);
@@ -77,7 +77,7 @@ describe("javascriptExtractor", () => {
 
 // Escapes are decoded for real JS literals only. Getting this wrong either ships
 // a literal `\n` to users or mangles JSX text, so each branch is pinned.
-describe("javascriptExtractor escape decoding", () => {
+describe("grammar extractor: javascript escape decoding", () => {
   test("decodes escapes in a plain string literal", async () => {
     const hits = await ts.extract({ source: `const m = "line one\\nline two";\n`, kind: "typescript" });
     expect(hits[0].value).toBe('"line one\nline two"');

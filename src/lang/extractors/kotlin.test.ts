@@ -1,11 +1,9 @@
-// Side-effect import: registers the dynamic Kotlin grammar with ast-grep.
-import "../registry";
+import { extractWithGrammar } from "./textmate";
 
-import { kotlinExtractor } from "./kotlin";
 
-const extract = (source: string) => kotlinExtractor.extract({ source, kind: "kotlin" });
+const extract = (source: string) => extractWithGrammar(source, "kotlin");
 
-describe("kotlinExtractor", () => {
+describe("grammar extractor: kotlin", () => {
   test("equality and `when` arms are type_tag", async () => {
     const source = [
       `fun f(x: String): Int {`,
@@ -55,8 +53,8 @@ describe("kotlinExtractor", () => {
 });
 
 // From a pilot bug report: the escape shipped to users as the literal text `\n`.
-describe("kotlinExtractor escape decoding", () => {
-  const extract = (source: string) => kotlinExtractor.extract({ source, kind: "kotlin" });
+describe("grammar extractor: kotlin escape decoding", () => {
+  const extract = (source: string) => extractWithGrammar(source, "kotlin");
 
   it("decodes escapes in a Compose string", async () => {
     const hits = await extract(

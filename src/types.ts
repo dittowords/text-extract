@@ -54,6 +54,15 @@ export interface DittoScanEnclosingContext {
   parentTag?: string;
 }
 
+export const DittoScanEnclosingContextSchema = z.object({
+  parentRole: DittoScanDetectionKindSchema,
+  identifiers: z.array(z.string()),
+  callee: z.string().optional(),
+  calleeMember: z.string().optional(),
+  methodName: z.string().optional(),
+  parentTag: z.string().optional(),
+}) satisfies z.ZodType<DittoScanEnclosingContext>;
+
 // One occurrence of the candidate string somewhere else in the codebase. Used
 // when the literal is declared as a constant and referenced from elsewhere, so
 // the LLM can see how it's actually used. Not populated by the current extract
@@ -98,5 +107,8 @@ export const DittoScanCandidateSchema = z.object({
   source_context: z.string(),
   context_identifiers: z.array(z.string()),
   usage_evidence: z.array(DittoScanUsageEvidenceSchema).nullable().optional(),
+  // The extractor's view of the wrapping construct. The server's rule
+  // classifier runs only when this is present (DIT-13628).
+  enclosing_context: DittoScanEnclosingContextSchema.optional(),
 });
 export type DittoScanCandidate = z.infer<typeof DittoScanCandidateSchema>;
