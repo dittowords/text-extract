@@ -145,9 +145,13 @@ const isMarkupText = (s: string[]) =>
 const isRawString = (s: string[], text: string) => anyOf(s, RAW_STRING) || RAW_STRING_PREFIX.test(text);
 // ponytail: hole delimiters are counted as braces, not read from the
 // grammar. Covers `{ }`, `{{ }}`, `{% %}`, `${ }`, `#{ }`, `<% %>` and
-// `<? ?>`. A brace inside a string literal in a hole is not counted; see
-// `addToText`.
+// `<? ?>`. A brace inside a string literal in a hole is not counted: a
+// string token is never passed to `holeDelta`. Upgrade path: read
+// `punctuation.section.embedded` where a grammar has it.
 const holeBalance = (text: string) => (text.match(/\{|<[%?]/g)?.length ?? 0) - (text.match(/\}|[%?]>/g)?.length ?? 0);
+// The balance change of one token. `prev` is the last character of the
+// previous hole token: a grammar can split `<%` or `%>` into two tokens.
+const holeDelta = (prev: string, text: string) => holeBalance(prev + text) - holeBalance(prev);
 
 // ---------------------------------------------------------------------------
 // Tokenizer walk
@@ -180,6 +184,8 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
   const markup = isMarkupGrammar(name);
   const out: ExtractedHit[] = [];
   const lines = source.split(/\r?\n/);
+  // ponytail: one line ending per file. A mixed file gets the first one.
+  const eol = source.includes("\r\n") ? "\r\n" : "\n";
 
   let stack: StateStack | null = INITIAL;
   let run: Run | null = null;
@@ -187,10 +193,11 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
   // hit on its own and is also part of the text node's span.
   let nested: Run | null = null;
   let pendingNewline = false;
-  // Index into `run.tokens` where the open hole began, and the brace
-  // balance of that hole.
+  // Index into `run.tokens` where the open hole began, the brace balance of
+  // that hole, and the last character of the previous hole token.
   let holeStart = -1;
   let balance = 0;
+  let holePrev = "";
   // True after a tag name until the `>`. A token with a `meta.tag` scope is
   // then tag content, not text.
   let inTag = false;
@@ -222,6 +229,7 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
     run = null;
     holeStart = -1;
     balance = 0;
+    holePrev = "";
   };
   // Cut an unfinished hole off a text run. Emit the text before it.
   const abortHole = () => {
@@ -233,7 +241,7 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
       // A text node that starts on the line after its tag begins at the end
       // of the tag's line. The source slice has the same start.
       const prevLine = tok.line - 1;
-      r.tokens.push({ text: "\n", scopes: [], line: prevLine, column: (lines[prevLine - 1]?.length ?? 0) + 1 });
+      r.tokens.push({ text: eol, scopes: [], line: prevLine, column: (lines[prevLine - 1]?.length ?? 0) + 1 });
     }
     r.tokens.push(tok);
   };
@@ -262,11 +270,13 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
         lineHasText = true;
       }
     } else {
-      if (balance === 0) holeStart = run!.tokens.length;
+      if (balance === 0) {
+        holeStart = run!.tokens.length;
+        holePrev = "";
+      }
       append(run!, tok);
-      // The balance is counted over the whole hole. A grammar can split `%>`
-      // into two tokens.
-      balance = Math.max(0, holeBalance(run!.tokens.slice(holeStart).map((t) => t.text).join("")));
+      balance = Math.max(0, balance + holeDelta(holePrev, tok.text));
+      holePrev = tok.text.slice(-1);
       if (balance === 0) holeStart = -1;
       return;
     }
@@ -291,7 +301,9 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
       };
 
       if (anyOf(s, ["comment."]) || anyOf(s, NOT_STRING)) {
-        flush();
+        // A comment inside a hole, as in `{/* c */}`, ends the text node
+        // before the hole.
+        abortHole();
         done();
         continue;
       }
@@ -351,11 +363,12 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
         continue;
       }
 
-      // Any other token between tags opens a text node. The token is text, or
-      // a hole at the start of a node, as in `<p>{{ __('x') }} more</p>` or
-      // `<p>{" "}more</p>`.
+      // A text token or a hole opener between tags opens a text node, as in
+      // `<p>{{ __('x') }} more</p>` or `<p>{" "}more</p>`. A hole closer such
+      // as the `}` after `{cond && <b>x</b>}` does not.
       const insideTag = inTag && anyOf(s, IN_TAG);
-      if (!insideTag && (markup || anyOf(s, TEXT_CONTAINER))) {
+      const opens = isMarkupText(s) || holeBalance(tok.text) > 0;
+      if (!insideTag && opens && (markup || anyOf(s, TEXT_CONTAINER))) {
         run = { kind: "text", tokens: [], context: { parentRole: "markup_text", identifiers: [] } };
         addToText(tok);
         done();

@@ -296,3 +296,43 @@ describe("grammar extractor: vue", () => {
     expect(hits).toEqual([]);
   });
 });
+
+// Hole edges in a text node. Each case was a wrong span before the fix.
+describe("grammar extractor: text node holes", () => {
+  test("a hole closer after a nested element does not open a text node", async () => {
+    const hits = await extractWithGrammar(`<div>Hi <Btn icon={<Icon />} /> there</div>;\n`, "tsx");
+    expect(values(hits)).toEqual(["Hi ", " there"]);
+    const cond = await extractWithGrammar(`<p>Hi {cond && <b>x</b>} there</p>;\n`, "tsx");
+    expect(values(cond)).toEqual(["Hi ", "x", " there"]);
+  });
+
+  test("a brace inside a literal in a hole does not count toward the hole", async () => {
+    const hits = await extractWithGrammar(`<p>{cond ? "{" : "x"} more</p>;\n`, "tsx");
+    expect(values(hits)).toEqual([`{cond ? "{" : "x"} more`, `"{"`, `"x"`]);
+  });
+
+  test("a comment in a hole ends the text node before the hole", async () => {
+    const hits = await extractWithGrammar(`<p>Hello {/* c */} world</p>;\n`, "tsx");
+    expect(values(hits)).toEqual(["Hello ", " world"]);
+  });
+
+  test("an unbalanced one-line hole is linear in its length", async () => {
+    const src = `<script>function f() {${"a();".repeat(20000)}}</script>\n`;
+    const started = Date.now();
+    await extractWithGrammar(src, "html");
+    expect(Date.now() - started).toBeLessThan(5000);
+  });
+});
+
+describe("grammar extractor: line endings", () => {
+  test("a multi-line hit in a CRLF file has a snapshot that matches the source", async () => {
+    const src = `const b = <p>\r\n  Two\r\n</p>;\r\nconst s = "a\\\r\nb";\r\n`;
+    const hits = await extractWithGrammar(src, "tsx");
+    const lineStarts = [0, ...[...src.matchAll(/\n/g)].map((m) => m.index! + 1)];
+    for (const h of hits) {
+      const at = lineStarts[h.location.line - 1] + h.location.column - 1;
+      expect(src.slice(at, at + h.snapshotText.length)).toBe(h.snapshotText);
+    }
+    expect(hits.map((h) => h.snapshotText)).toEqual(["\r\n  Two", '"a\\\r\nb"']);
+  });
+});
