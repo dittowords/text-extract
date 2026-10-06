@@ -1,6 +1,5 @@
 import { androidResourceExtractor } from "./extractors/android-resources";
 import { arbExtractor } from "./extractors/arb";
-import { fallbackExtractor } from "./extractors/fallback";
 import { jsonI18nExtractor } from "./extractors/json-i18n";
 import { poExtractor } from "./extractors/po";
 import { propertiesExtractor } from "./extractors/properties";
@@ -25,12 +24,6 @@ export interface Language {
   // pathMatches filter — every locale flows through.
   pathMatches?: (relPath: string) => boolean;
 }
-
-export const REGEX_FALLBACK_ID = "regex_fallback";
-
-// Source-code-like extensions with no grammar either; the regex fallback
-// still catches their quoted literals.
-const REGEX_FALLBACK_EXTENSIONS: ReadonlySet<string> = new Set([".ejs"]);
 
 // `res/values/` and locale-qualified `res/values-<X>/` both flow
 // through; downstream groups by resource key.
@@ -87,12 +80,6 @@ export const LANGUAGES: readonly Language[] = [
   { id: "resx", extensions: [".resx", ".resw"], extractor: resxExtractor },
 ];
 
-const REGEX_FALLBACK_LANGUAGE: Language = {
-  id: REGEX_FALLBACK_ID,
-  extensions: [],
-  extractor: fallbackExtractor,
-};
-
 export function findLanguageForFile({
   ext,
   relPath,
@@ -106,7 +93,7 @@ export function findLanguageForFile({
     if (lang.pathMatches && !lang.pathMatches(relPath)) continue;
     return lang;
   }
-  return REGEX_FALLBACK_EXTENSIONS.has(lower) ? REGEX_FALLBACK_LANGUAGE : null;
+  return null;
 }
 
 const I18N_LANGUAGE_IDS = new Set([

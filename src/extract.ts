@@ -6,6 +6,7 @@ import { createHash } from "crypto";
 import type { FileDiscoveryStats } from "./lang/file-discovery";
 import type { Language } from "./lang/registry";
 import type { ExtractedHit } from "./lang/types";
+import { computeLineOffsets } from "./lang/extractors/util";
 import {
   DittoScanDetectionKindSchema,
   type DittoScanCandidate,
@@ -273,20 +274,19 @@ export function assignOccurrenceIndexes(
 const GAP_TO_NEXT_MAX = 500;
 
 /**
- * The source after each hit in `hits` (sorted by position): up to the next
- * hit, a blank line, or GAP_TO_NEXT_MAX characters, whichever comes first.
- * Null only when nothing follows. A `+` between two literals, an inline tag,
- * or a `{hole}` all fit in a short gap. The server checks whether a gap reaches
- * the next hit, and joins the two only then; a gap that stops short is the
- * code after a lone literal.
+ * The source after each hit in `hits`, which is sorted by position. The gap
+ * ends at the next hit, at a blank line, or after GAP_TO_NEXT_MAX
+ * characters, whichever comes first. Null when nothing follows. A `+`
+ * between two literals, an inline tag, or a `{hole}` fits in a short gap.
+ * The server joins two hits only when the gap reaches the next hit. A gap
+ * that stops short is the code after a lone literal.
  *
- * A hit nested inside another's span (the `" "` of a JSX `{" "}` spacer, a
- * literal inside a template hole) is part of that span already, so the next
- * hit is the first one that starts after the span ends.
+ * A hit nested inside the span of another hit is already part of that span.
+ * Examples: the `" "` of a JSX `{" "}` spacer, a literal inside a template
+ * hole. The next hit is then the first hit that starts after the span ends.
  */
 export function gapsToNext(hits: readonly Pick<ExtractedHit, "location" | "snapshotText">[], source: string): (string | null)[] {
-  const lineStarts = [0];
-  for (let i = 0; i < source.length; i++) if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
+  const lineStarts = computeLineOffsets(source);
   const offset = (h: Pick<ExtractedHit, "location">) => lineStarts[h.location.line - 1] + h.location.column - 1;
   return hits.map((hit, i) => {
     const from = offset(hit) + hit.snapshotText.length;

@@ -1,16 +1,13 @@
 /**
- * The regex fallback handles every language without a grammar, and a regex over
- * quote/backslash-dense source is the classic catastrophic-backtracking setup —
- * where the failure is a pinned CPU, not a wrong answer. Three-line unit tests
- * can't see it. Loose bound on purpose: a cliff detector, not a benchmark.
+ * A grammar is a set of regexes. Source dense with quotes and backslashes
+ * is the classic input for catastrophic backtracking. The failure is a CPU
+ * at 100%, not a wrong answer, so a small unit test does not show it. The
+ * bound is loose on purpose. This is a cliff detector, not a benchmark.
  */
 
-import { fallbackExtractor } from "./lang/extractors/fallback";
 import { grammarExtractor } from "./lang/extractors/grammar";
 
 const BUDGET_MS = 10_000;
-
-const tsxExtractor = grammarExtractor;
 
 function timed(label: string, run: () => Promise<unknown>) {
   it(`${label} finishes well inside the budget`, async () => {
@@ -40,27 +37,14 @@ const oneHugeLine = `const x = ${Array.from(
   (_, i) => `"chunk ${i}"`
 ).join(" + ")};\n`;
 
-timed("fallback extractor on escape-dense source", () =>
-  fallbackExtractor.extract({ source: escapeDense, kind: "regex_fallback" })
-);
+timed("escape-dense source", () => grammarExtractor.extract({ source: escapeDense, kind: "tsx" }));
 
-timed("fallback extractor on many literals", () =>
-  fallbackExtractor.extract({ source: manyLiterals, kind: "regex_fallback" })
-);
+timed("many literals", () => grammarExtractor.extract({ source: manyLiterals, kind: "tsx" }));
 
-timed("fallback extractor on one huge line", () =>
-  fallbackExtractor.extract({ source: oneHugeLine, kind: "regex_fallback" })
-);
-
-timed("javascript extractor on many literals", () =>
-  tsxExtractor.extract({ source: manyLiterals, kind: "tsx" })
-);
+timed("one huge line", () => grammarExtractor.extract({ source: oneHugeLine, kind: "tsx" }));
 
 it("still finds the strings in the large input", async () => {
   // A time bound alone would pass if extraction gave up.
-  const hits = await fallbackExtractor.extract({
-    source: manyLiterals,
-    kind: "regex_fallback",
-  });
+  const hits = await grammarExtractor.extract({ source: manyLiterals, kind: "tsx" });
   expect(hits.length).toBeGreaterThan(7000);
 });

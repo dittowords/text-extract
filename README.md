@@ -57,4 +57,4 @@ yarn build
 | `golden.test.ts` | Realistic fixtures from `testing/golden/`, with hand-written expectations. Fixtures are tested under a `relPath` that need not match their location on disk, since path shape drives i18n admission and locale detection. |
 | `extract-file.test.ts` | That the two entry points agree per file. |
 | `extract-failures.test.ts` | That a throwing extractor is counted, not swallowed. |
-| `extract-performance.test.ts` | That the regex fallback doesn't backtrack catastrophically on dense input. |
+| `extract-performance.test.ts` | That the grammar extractor doesn't backtrack catastrophically on dense input. |

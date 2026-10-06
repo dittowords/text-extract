@@ -2,7 +2,6 @@
 import type { LanguageExtractor } from "../types";
 import { androidResourceExtractor } from "./android-resources";
 import { arbExtractor } from "./arb";
-import { fallbackExtractor } from "./fallback";
 import { jsonI18nExtractor } from "./json-i18n";
 import { poExtractor } from "./po";
 import { propertiesExtractor } from "./properties";
@@ -76,15 +75,6 @@ const cases: {
     source: `
       let greeting = "Don't stop\\nnow"
       let raw = #"Keep \\n literal"#
-    `,
-  },
-  {
-    name: "fallback",
-    extractor: fallbackExtractor,
-    kind: "python",
-    source: `
-      greeting = "Don't stop"
-      other = 'Save changes'
     `,
   },
   {

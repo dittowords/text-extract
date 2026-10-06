@@ -12,8 +12,8 @@ import { elementAttribute, emitTextHit, findCdataElements, tagName } from "./xml
  *
  * Each `<source>` and `<target>` text is emitted as `resource_value`, tagged
  * with `[unitId, "source"|"target"]`. `<note>` (translator comments) and
- * metadata elements are skipped. CDATA-wrapped content is recovered via a
- * regex sweep; the tree walk leaves CDATA sections alone.
+ * metadata elements are skipped. Content in CDATA is found by a regex
+ * sweep. The tree walk skips CDATA sections.
  */
 export const xliffExtractor: LanguageExtractor = {
   async extract({ source }) {

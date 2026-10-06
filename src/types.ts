@@ -13,8 +13,8 @@ export const DittoScanDetectionKindSchema = z.enum([
 ]);
 export type DittoScanDetectionKind = z.infer<typeof DittoScanDetectionKindSchema>;
 
-// The extractor's view of a hit's site: the kind, and the attribute name or the
-// resource key path. Surfaced on the candidate as `detection_kind` and
+// The site of a hit: the kind, and the attribute name or the resource key
+// path. On the candidate these are `detection_kind` and
 // `context_identifiers`.
 export interface DittoScanEnclosingContext {
   parentRole: DittoScanDetectionKind;
@@ -65,11 +65,10 @@ export const DittoScanCandidateSchema = z.object({
   source_context: z.string(),
   context_identifiers: z.array(z.string()),
   usage_evidence: z.array(DittoScanUsageEvidenceSchema).nullable().optional(),
-  // The extractor's view of the wrapping construct (DIT-13628).
-  // The source between the end of this hit and the start of the next hit in
-  // the same file, when they are close: at most GAP_TO_NEXT_MAX characters
-  // and no blank line. The server asks whether the two read as one piece of
-  // copy and renders the joined value from the spans. Null otherwise.
+  // The source between the end of this hit and the start of the next hit
+  // in the same file, when the two are close: at most GAP_TO_NEXT_MAX
+  // characters and no blank line. The server decides whether the two read
+  // as one piece of copy, and joins the spans. Null otherwise.
   gap_to_next: z.string().nullable(),
 });
 export type DittoScanCandidate = z.infer<typeof DittoScanCandidateSchema>;

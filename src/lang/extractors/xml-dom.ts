@@ -1,11 +1,12 @@
 import { INITIAL, type IToken, type StateStack } from "vscode-textmate";
 
 import { loadGrammar } from "./grammar";
+import { computeLineOffsets } from "./util";
 
 /**
- * XML tree for the resource-file extractors, built from the TextMate XML
- * grammar's tokens so every format in this package goes through the same
- * tokenizer. The node shape is the one the walkers already read:
+ * XML tree for the resource-file extractors. The tree is built from the
+ * tokens of the TextMate XML grammar, so every format in this package goes
+ * through the same tokenizer. The node shape is the one the walkers read:
  *
  *   element
  *     start_tag | self_closing_tag
@@ -17,12 +18,13 @@ import { loadGrammar } from "./grammar";
  *     text | cdata | comment | element ...
  *     end_tag
  *
- * CDATA sections are their own node, so `innerText` sees the `<![CDATA[`
- * marker in the raw span and leaves them to the CDATA sweep.
+ * A CDATA section is its own node. The raw span of an element with CDATA
+ * has the `<![CDATA[` marker, and `innerText` leaves that element to the
+ * CDATA sweep.
  *
- * Tolerant by design: a stray `</x>` with no open `<x>` is ignored, and the
- * end of input closes whatever is still open. Resource files are machine
- * written, so this is a floor, not a validator.
+ * The parser is tolerant. A stray `</x>` with no open `<x>` is ignored. The
+ * end of input closes every open node. Resource files are machine written,
+ * so this is a floor, not a validator.
  */
 
 type Kind =
@@ -116,8 +118,7 @@ const has = (scopes: string[], prefix: string) => scopes.some((s) => s.startsWit
 
 export async function parseXml(source: string): Promise<XmlNode> {
   const grammar = await loadGrammar("xml");
-  const lineStarts = [0];
-  for (let i = 0; i < source.length; i++) if (source.charCodeAt(i) === 10) lineStarts.push(i + 1);
+  const lineStarts = computeLineOffsets(source);
 
   const node = (kind: Kind, start: number) => new XmlNode(kind, source, start, lineStarts);
   const root = node("document", 0);
@@ -125,8 +126,8 @@ export async function parseXml(source: string): Promise<XmlNode> {
   const top = () => open[open.length - 1];
 
   // Builder state.
-  let tag: XmlNode | null = null; // the start_tag or end_tag being filled
-  let element: XmlNode | null = null; // the element that `tag` opens
+  let tag: XmlNode | null = null; // the open start_tag or end_tag
+  let element: XmlNode | null = null; // the element of `tag`
   let closing = false;
   let attr: XmlNode | null = null;
   let quoted: XmlNode | null = null;
@@ -158,7 +159,7 @@ export async function parseXml(source: string): Promise<XmlNode> {
       const end = lineOffset + t.endIndex;
       const txt = line.slice(t.startIndex, t.endIndex);
 
-      // Comments and CDATA: one node from opener to closer.
+      // A comment or CDATA section is one node, from opener to closer.
       const spanKind: Kind | null = has(s, "comment.") ? "comment" : has(s, "string.unquoted.cdata") ? "cdata" : null;
       if (spanKind) {
         endText();
@@ -221,7 +222,7 @@ export async function parseXml(source: string): Promise<XmlNode> {
           tag.add(node("tag_name", start)).close(end);
         } else if (has(s, "entity.other.attribute-name")) {
           if (attr) attr.close(start);
-          // The grammar folds leading whitespace into the name token.
+          // The name token includes the leading whitespace.
           const lead = txt.length - txt.trimStart().length;
           attr = tag.add(node("attribute", start + lead));
           attr.add(node("attribute_name", start + lead)).close(end);
@@ -248,7 +249,7 @@ export async function parseXml(source: string): Promise<XmlNode> {
       if (!text) text = top().add(node("text", start));
       text.close(end);
     }
-    // The newline belongs to whichever text or span node is open.
+    // The newline is part of the open text or span node.
     lineOffset += line.length + 1;
     if (li < lines.length - 1) {
       if (text) text.close(lineOffset);

@@ -153,9 +153,9 @@ export interface CdataMatch {
   valueOffset: number;
 }
 
-// The tree walk skips any element that holds a CDATA section (see
-// `emitTextHit`), so this regex sweep recovers those by name. The two never
-// overlap, so no dedup is needed.
+// The tree walk skips every element with a CDATA section. See `emitTextHit`.
+// This regex sweep finds those elements by name. The two sets never overlap,
+// so no dedup is needed.
 export function findCdataElements(source: string, tagNames: readonly string[]): CdataMatch[] {
   if (tagNames.length === 0) return [];
   const alt = tagNames.map(escapeRegex).join("|");
