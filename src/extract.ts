@@ -270,13 +270,15 @@ export function assignOccurrenceIndexes(
   return indexes;
 }
 
-const GAP_TO_NEXT_MAX = 200;
+const GAP_TO_NEXT_MAX = 500;
 
 /**
- * The source between each hit and the next one in `hits` (sorted by
- * position), or null when they are far apart or a blank line separates them.
- * A `+` between two literals, an inline tag, or a `{hole}` all fit in a short
- * gap; two unrelated strings usually do not. The server decides which it is.
+ * The source after each hit in `hits` (sorted by position): up to the next
+ * hit, a blank line, or GAP_TO_NEXT_MAX characters, whichever comes first.
+ * Null only when nothing follows. A `+` between two literals, an inline tag,
+ * or a `{hole}` all fit in a short gap. The server checks whether a gap reaches
+ * the next hit, and joins the two only then; a gap that stops short is the
+ * code after a lone literal.
  *
  * A hit nested inside another's span (the `" "` of a JSX `{" "}` spacer, a
  * literal inside a template hole) is part of that span already, so the next
@@ -289,11 +291,11 @@ export function gapsToNext(hits: readonly Pick<ExtractedHit, "location" | "snaps
   return hits.map((hit, i) => {
     const from = offset(hit) + hit.snapshotText.length;
     const next = hits.slice(i + 1).find((h) => offset(h) >= from);
-    if (!next) return null;
-    const to = offset(next);
-    if (to - from > GAP_TO_NEXT_MAX) return null;
-    const gap = source.slice(from, to);
-    return /\n\s*\n/.test(gap) ? null : gap;
+    const to = Math.min(next ? offset(next) : source.length, from + GAP_TO_NEXT_MAX);
+    let gap = source.slice(from, to);
+    const blank = /\n\s*\n/.exec(gap);
+    if (blank) gap = gap.slice(0, blank.index);
+    return gap === "" ? null : gap;
   });
 }
 
@@ -342,7 +344,6 @@ export async function extractFromResolvedFile(args: {
       source_context: buildSourceContext(lines, hit.location.line),
       context_identifiers: hit.context.identifiers,
       usage_evidence: null,
-      enclosing_context: hit.context,
       gap_to_next: gaps[index],
     });
   }

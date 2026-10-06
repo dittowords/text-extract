@@ -13,19 +13,13 @@ export const DittoScanDetectionKindSchema = z.enum([
 ]);
 export type DittoScanDetectionKind = z.infer<typeof DittoScanDetectionKindSchema>;
 
-// Produced by the extractors. Surfaced on the candidate as `detection_kind`
-// and `context_identifiers`.
+// The extractor's view of a hit's site: the kind, and the attribute name or the
+// resource key path. Surfaced on the candidate as `detection_kind` and
+// `context_identifiers`.
 export interface DittoScanEnclosingContext {
   parentRole: DittoScanDetectionKind;
-  // Lowercased identifiers from the wrapping construct, in source order.
-  // For `markup_attr` this is the attribute name; otherwise empty.
   identifiers: string[];
 }
-
-export const DittoScanEnclosingContextSchema = z.object({
-  parentRole: DittoScanDetectionKindSchema,
-  identifiers: z.array(z.string()),
-}) satisfies z.ZodType<DittoScanEnclosingContext>;
 
 // One occurrence of the candidate string somewhere else in the codebase. Used
 // when the literal is declared as a constant and referenced from elsewhere, so
@@ -72,7 +66,6 @@ export const DittoScanCandidateSchema = z.object({
   context_identifiers: z.array(z.string()),
   usage_evidence: z.array(DittoScanUsageEvidenceSchema).nullable().optional(),
   // The extractor's view of the wrapping construct (DIT-13628).
-  enclosing_context: DittoScanEnclosingContextSchema.optional(),
   // The source between the end of this hit and the start of the next hit in
   // the same file, when they are close: at most GAP_TO_NEXT_MAX characters
   // and no blank line. The server asks whether the two read as one piece of

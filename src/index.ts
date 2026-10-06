@@ -39,7 +39,6 @@ export {
   DittoScanUsageEvidenceSchema,
   type DittoScanCandidate,
   type DittoScanDetectionKind,
-  type DittoScanEnclosingContext,
   type DittoScanStatus,
   type DittoScanUsageEvidence,
 } from "./types";
