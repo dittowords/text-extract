@@ -16,6 +16,8 @@ export const GRAMMAR_LANGUAGES: readonly GrammarLanguage[] = [
   { grammar: "tsx", extensions: [".tsx"] },
   { grammar: "javascript", extensions: [".js", ".cjs", ".mjs"] },
   { grammar: "jsx", extensions: [".jsx"] },
+  // An Angular template has `@if` control-flow blocks, which are code, not text.
+  { grammar: "angular-html", extensions: [".html"], pathMatches: (p) => /\.component\.html$/i.test(p) },
   { grammar: "html", extensions: [".html", ".htm"] },
   { grammar: "vue", extensions: [".vue"] },
   // The Kotlin grammar also covers .kts (Gradle scripts) and .ktm (Kotlin modules).

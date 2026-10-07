@@ -73,6 +73,10 @@ function getRegistry(): Registry {
   }));
   registry = new Registry({
     onigLib,
+    // The Angular template grammars (`@if` blocks, `{{ }}`, `@let`) are injected
+    // into the Angular HTML grammar. Other injections stay off, so the other
+    // languages tokenize as before.
+    getInjections: (scopeName) => (scopeName === "text.html.derivative.ng" ? ["template.blocks.ng", "template.ng", "template.let.ng"] : undefined),
     async loadGrammar(scopeName) {
       const f = grammarFileForScope(scopeName);
       if (!f) return null;
@@ -116,7 +120,7 @@ const EMBEDDED = ["meta.embedded"]; // a `{ }` expression in an attribute
 // The innermost scope of a markup text token. In a grammar with a `text.`
 // root, text has only the root scope. In JSX and in a nested Vue
 // `<template>`, text has a container scope.
-const TEXT_CONTAINER = ["text.", "meta.jsx.children", "meta.template-tag."];
+const TEXT_CONTAINER = ["text.", "meta.jsx.children", "meta.template-tag.", "control.block.body.ng"];
 const TEXT_ANY = ["constant.character.entity"]; // `&amp;` belongs to the text node
 const RAW_STRING = ["string.quoted.raw"];
 const RAW_STRING_PREFIX = /^(?:"""|#+"|@")/; // kotlin, swift, c#

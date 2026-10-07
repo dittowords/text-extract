@@ -11,6 +11,7 @@ const SAMPLES: Record<string, string> = {
   javascript: 'const a = "Hello world";\nconst b = `Welcome back, ${name}!`;\n',
   jsx: 'const a = "Hello world";\nconst b = <p>Welcome back, {name}!</p>;\n',
   html: "<p>Hello world</p>\n<p>Welcome back, {{ name }}!</p>\n",
+  "angular-html": '<p>Hello world</p>\n@if (user) {\n  <p>Welcome back, {{ name }}!</p>\n}\n',
   vue: "<template>\n  <p>Hello world</p>\n  <p>Welcome back, {{ name }}!</p>\n</template>\n",
   kotlin: 'val a = "Hello world"\nval b = "Welcome back, $name!"\n',
   swift: 'let a = "Hello world"\nlet b = "Welcome back, \\(name)!"\n',
