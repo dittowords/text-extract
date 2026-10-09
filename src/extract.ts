@@ -6,7 +6,7 @@ import { createHash } from "crypto";
 import type { FileDiscoveryStats } from "./lang/file-discovery";
 import type { Language } from "./lang/registry";
 import type { ExtractedHit } from "./lang/types";
-import { shouldEmit } from "./rules";
+import { computeLineOffsets } from "./lang/extractors/util";
 import {
   DittoScanDetectionKindSchema,
   type DittoScanCandidate,
@@ -271,6 +271,34 @@ export function assignOccurrenceIndexes(
   return indexes;
 }
 
+const GAP_TO_NEXT_MAX = 500;
+
+/**
+ * The source after each hit in `hits`, which is sorted by position. The gap
+ * ends at the next hit, at a blank line, or after GAP_TO_NEXT_MAX
+ * characters, whichever comes first. Null when nothing follows. A `+`
+ * between two literals, an inline tag, or a `{hole}` fits in a short gap.
+ * The server joins two hits only when the gap reaches the next hit. A gap
+ * that stops short is the code after a lone literal.
+ *
+ * A hit nested inside the span of another hit is already part of that span.
+ * Examples: the `" "` of a JSX `{" "}` spacer, a literal inside a template
+ * hole. The next hit is then the first hit that starts after the span ends.
+ */
+export function gapsToNext(hits: readonly Pick<ExtractedHit, "location" | "snapshotText">[], source: string): (string | null)[] {
+  const lineStarts = computeLineOffsets(source);
+  const offset = (h: Pick<ExtractedHit, "location">) => lineStarts[h.location.line - 1] + h.location.column - 1;
+  return hits.map((hit, i) => {
+    const from = offset(hit) + hit.snapshotText.length;
+    const next = hits.slice(i + 1).find((h) => offset(h) >= from);
+    const to = Math.min(next ? offset(next) : source.length, from + GAP_TO_NEXT_MAX);
+    let gap = source.slice(from, to);
+    const blank = /\n\s*\n/.exec(gap);
+    if (blank) gap = gap.slice(0, blank.index);
+    return gap === "" ? null : gap;
+  });
+}
+
 /**
  * The extraction step for one resolved file, no I/O. Both `runExtract` and
  * `extractFile` route through here so there's only one copy of it. Extractor
@@ -293,8 +321,9 @@ export async function extractFromResolvedFile(args: {
   const lines = source.split(/\r?\n/);
   const candidates: DittoScanCandidate[] = [];
 
-  const emitted = hits.filter((hit) => shouldEmit(hit.value, hit.context));
+  const emitted = [...hits].sort((a, b) => a.location.line - b.location.line || a.location.column - b.location.column);
   const occurrenceIndexes = assignOccurrenceIndexes(emitted);
+  const gaps = gapsToNext(emitted, source);
 
   for (const [index, hit] of emitted.entries()) {
     candidates.push({
@@ -315,6 +344,7 @@ export async function extractFromResolvedFile(args: {
       source_context: buildSourceContext(lines, hit.location.line),
       context_identifiers: hit.context.identifiers,
       usage_evidence: null,
+      gap_to_next: gaps[index],
     });
   }
 

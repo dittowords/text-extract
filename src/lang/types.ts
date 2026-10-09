@@ -19,8 +19,8 @@ export interface ExtractedHit {
   localeKey?: string;
 }
 
-// Escape hatch for languages that don't fit the engine's spec-driven path
-// (the regex fallback and SFC formats like Vue).
+// One per file format. Source code goes through the grammar extractor.
+// Each localization resource format has its own.
 export interface LanguageExtractor {
   extract(opts: { source: string; kind: string }): Promise<ExtractedHit[]>;
 }

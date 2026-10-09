@@ -5,9 +5,8 @@ import { decodeEscapes, offsetToLineCol } from "./util";
  * iOS `.strings` files (Localizable.strings, InfoPlist.strings, etc.).
  *
  * Format is a sequence of `"key" = "value";` pairs with `// line` and
- * `/* block *\/` comments. There's no AST grammar shipped for this in
- * @ast-grep/napi, and the format is simple enough that a hand-rolled
- * lexer is the cleanest path. Every value is intentional user-facing
+ * `/* block *\/` comments. The format is simple, so the lexer is hand
+ * written. Every value is intentional user-facing
  * copy, so every pair emits a `resource_value` hit. Escapes (`\"`,
  * `\n`, etc.) are kept verbatim in the value — mirrors the JS extractor
  * which keeps `template_string` source as-is.

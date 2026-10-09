@@ -17,7 +17,6 @@ import {
 import {
   findI18nLanguageForExt,
   findLanguageForFile,
-  REGEX_FALLBACK_ID,
   type Language,
 } from "./lang/registry";
 import { looksMinified, platformLocaleForPath } from "./walk";
@@ -83,8 +82,7 @@ export function resolveFile(
 
   return {
     language,
-    languageLabel:
-      language.id === REGEX_FALLBACK_ID ? ext.slice(1) || "unknown" : language.id,
+    languageLabel: language.id,
     localeKey,
   };
 }

@@ -25,7 +25,6 @@ export {
   type SkipReason,
 } from "./extract-file";
 
-export { shouldEmit } from "./rules";
 
 export {
   walkCodebase,
@@ -40,7 +39,6 @@ export {
   DittoScanUsageEvidenceSchema,
   type DittoScanCandidate,
   type DittoScanDetectionKind,
-  type DittoScanEnclosingContext,
   type DittoScanStatus,
   type DittoScanUsageEvidence,
 } from "./types";

@@ -1,10 +1,10 @@
-import { type SgNode } from "@ast-grep/napi";
+import { type XmlNode } from "./xml-dom";
 
 import type { ExtractedHit } from "../types";
 
 const CDATA_MARKER = "<![CDATA[";
 
-export function tagName(element: SgNode): string | null {
+export function tagName(element: XmlNode): string | null {
   const start = element.children().find((c) => c.kind() === "start_tag");
   return (
     start
@@ -14,7 +14,7 @@ export function tagName(element: SgNode): string | null {
   );
 }
 
-export function elementAttribute(element: SgNode, name: string): string | null {
+export function elementAttribute(element: XmlNode, name: string): string | null {
   const start = element.children().find((c) => c.kind() === "start_tag");
   if (!start) return null;
   for (const attr of start.children()) {
@@ -47,7 +47,7 @@ export function elementAttribute(element: SgNode, name: string): string | null {
 // `transformValue` is per-format: Android processes escapes and printf specifiers
 // inside a value; .resx and XLIFF don't, and pass nothing.
 export function emitTextHit(
-  element: SgNode,
+  element: XmlNode,
   identifiers: string[],
   out: ExtractedHit[],
   source?: string,
@@ -81,7 +81,7 @@ export function emitTextHit(
 // grammar closes them at the first nested tag, promotes that tag to a sibling
 // and demotes the real `</source>` to an `erroneous_end_tag`.
 export function innerText(
-  element: SgNode,
+  element: XmlNode,
   source?: string,
 ): { value: string; raw: string; line: number; column: number } | null {
   const children = element.children();
@@ -136,7 +136,7 @@ function decodeXmlEntities(text: string): string {
     .replace(/&amp;/g, "&");
 }
 
-function elementContainsCdata(element: SgNode, source: string): boolean {
+function elementContainsCdata(element: XmlNode, source: string): boolean {
   const range = element.range();
   const idx = source.indexOf(CDATA_MARKER, range.start.index);
   return idx !== -1 && idx < range.end.index;
@@ -153,10 +153,9 @@ export interface CdataMatch {
   valueOffset: number;
 }
 
-// ast-grep's HTML grammar drops CDATA text nodes silently, so an AST walk
-// over `<value><![CDATA[...]]></value>` sees no text child at all. This
-// regex sweep recovers those by name. The AST pass never captures CDATA in
-// the first place, so there's no overlap — no dedup needed.
+// The tree walk skips every element with a CDATA section. See `emitTextHit`.
+// This regex sweep finds those elements by name. The two sets never overlap,
+// so no dedup is needed.
 export function findCdataElements(source: string, tagNames: readonly string[]): CdataMatch[] {
   if (tagNames.length === 0) return [];
   const alt = tagNames.map(escapeRegex).join("|");

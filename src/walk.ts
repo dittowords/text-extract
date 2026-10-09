@@ -13,7 +13,6 @@ import type { FileDiscoveryStats } from "./lang/file-discovery";
 import {
   findI18nLanguageForExt,
   findLanguageForFile,
-  REGEX_FALLBACK_ID,
   type Language,
 } from "./lang/registry";
 
@@ -154,7 +153,7 @@ export async function walkCodebase(rootPath: string): Promise<WalkResult> {
       relPath,
       language,
       source,
-      languageLabel: labelFor(language, ext),
+      languageLabel: language.id,
       localeKey,
     });
   }
@@ -194,11 +193,6 @@ export function platformLocaleForPath(
     return extractIosLocaleFromPath(relPath);
   }
   return null;
-}
-
-function labelFor(language: Language, ext: string): string {
-  if (language.id !== REGEX_FALLBACK_ID) return language.id;
-  return ext.slice(1) || "unknown";
 }
 
 export function looksMinified(source: string): boolean {

@@ -1,6 +1,6 @@
 {
   "name": "@dittowords/text-extract",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Deterministic extraction of candidate user-facing strings from a codebase.",
   "license": "MIT",
   "main": "dist/index.js",
@@ -21,10 +21,10 @@
     "prepublishOnly": "yarn test && yarn build"
   },
   "dependencies": {
-    "@ast-grep/lang-kotlin": "^0.0.7",
-    "@ast-grep/lang-swift": "^0.0.8",
-    "@ast-grep/napi": "^0.43.0",
     "globby": "^16.2.0",
+    "tm-grammars": "^1.32.22",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
