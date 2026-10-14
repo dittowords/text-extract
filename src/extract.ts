@@ -12,7 +12,7 @@ import {
   type DittoScanCandidate,
   type DittoScanDetectionKind,
 } from "./types";
-import { walkCodebase } from "./walk";
+import { listCodebase, readListedFile } from "./walk";
 
 export interface DittoScanExtractOptions {
   inputPath: string;
@@ -36,6 +36,7 @@ export interface DittoScanExtractSummary {
   filesScanned: number;
   filesByKind: Record<string, number>;
   filesSkippedMinified: number;
+  filesSkippedTooLarge: number;
   candidatesEmitted: number;
   candidatesByKind: Record<DittoScanDetectionKind, number>;
   framework: string[];
@@ -354,22 +355,37 @@ export async function extractFromResolvedFile(args: {
 export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoScanExtractResult> {
   const t0 = Date.now();
   const framework = await detectFramework(opts.inputPath);
-  const { files, filesSkippedMinified, i18nFileDiscovery } = await walkCodebase(opts.inputPath);
+  // Each file is read right before it's extracted, so the read's I/O gives the event loop a turn
+  // between files. Extraction is CPU-only, so reading everything first blocks it for the whole repo.
+  const { files, i18nFileDiscovery } = await listCodebase(opts.inputPath);
 
   const filesByKind: Record<string, number> = {};
-  for (const f of files) filesByKind[f.language.id] = (filesByKind[f.language.id] ?? 0) + 1;
-
+  let filesScanned = 0;
+  let filesSkippedMinified = 0;
+  let filesSkippedTooLarge = 0;
   const candidatesByKind = zeroKindCounts();
   const candidates: DittoScanCandidate[] = [];
   const failures: DittoScanExtractFailure[] = [];
   let filesFailed = 0;
 
   for (const file of files) {
+    const source = await readListedFile(file);
+    if (source === "unreadable") continue;
+    if (source === "too-large") {
+      filesSkippedTooLarge++;
+      continue;
+    }
+    if (source === "minified") {
+      filesSkippedMinified++;
+      continue;
+    }
+    filesScanned++;
+    filesByKind[file.language.id] = (filesByKind[file.language.id] ?? 0) + 1;
     let fileCandidates: DittoScanCandidate[];
     try {
       fileCandidates = await extractFromResolvedFile({
         relPath: file.relPath,
-        source: file.source,
+        source,
         language: file.language,
         languageLabel: file.languageLabel,
         localeKey: file.localeKey,
@@ -398,9 +414,10 @@ export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoSc
   return {
     candidates,
     summary: {
-      filesScanned: files.length,
+      filesScanned,
       filesByKind,
       filesSkippedMinified,
+      filesSkippedTooLarge,
       candidatesEmitted: candidates.length,
       candidatesByKind,
       framework,

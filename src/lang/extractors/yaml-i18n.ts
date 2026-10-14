@@ -1,6 +1,7 @@
 import { parseDocument } from "yaml";
 
 import type { ExtractedHit, LanguageExtractor } from "../types";
+import { offsetToLineCol } from "./util";
 
 // YAML i18n files — vue-i18n YAML mode, Rails `config/locales`, etc.
 // Same conventions as the JSON i18n extractor: descend into maps, emit
@@ -273,17 +274,4 @@ function emitScalar(
     // `identifiers` splits into [base, variant].
     i18nKey: path.length > 0 ? path.join(".") : undefined,
   });
-}
-
-function offsetToLineCol(source: string, offset: number): { line: number; column: number } {
-  let line = 1;
-  let lastNewline = -1;
-  const limit = Math.min(offset, source.length);
-  for (let i = 0; i < limit; i++) {
-    if (source.charCodeAt(i) === 10) {
-      line++;
-      lastNewline = i;
-    }
-  }
-  return { line, column: Math.max(1, offset - lastNewline) };
 }
