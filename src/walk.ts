@@ -150,7 +150,7 @@ export async function listCodebase(rootPath: string): Promise<ListResult> {
   return { files, i18nFileDiscovery: i18nFileResult?.stats ?? null };
 }
 
-// Some formats get slower faster than they grow (the `yaml` parser is quadratic), so big files are skipped.
+// Extremely large files are skipped to avoid performance bottlenecks.
 export const MAX_FILE_BYTES = 1024 * 1024;
 
 export async function readListedFile(
