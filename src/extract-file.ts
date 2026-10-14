@@ -19,7 +19,7 @@ import {
   findLanguageForFile,
   type Language,
 } from "./lang/registry";
-import { looksMinified, platformLocaleForPath } from "./walk";
+import { looksMinified, MAX_FILE_BYTES, platformLocaleForPath } from "./walk";
 import type { DittoScanCandidate } from "./types";
 
 // Must match what `runFileDiscoveryTask` reads, or admission would depend on
@@ -29,6 +29,7 @@ const PREVIEW_CHARS = 400;
 export type SkipReason =
   | "unsupported_language"
   | "unconfirmed_i18n_file"
+  | "too_large"
   | "minified";
 
 export interface ResolvedFile {
@@ -78,6 +79,7 @@ export function resolveFile(
   }
 
   // After language resolution, so an unsupported file reports that instead.
+  if (Buffer.byteLength(source, "utf8") > MAX_FILE_BYTES) return "too_large";
   if (looksMinified(source)) return "minified";
 
   return {

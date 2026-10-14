@@ -91,10 +91,18 @@ export interface DiscoveredFile {
 export interface WalkResult {
   files: DiscoveredFile[];
   filesSkippedMinified: number;
+  filesSkippedTooLarge: number;
   i18nFileDiscovery: FileDiscoveryStats | null;
 }
 
-export async function walkCodebase(rootPath: string): Promise<WalkResult> {
+export type ListedFile = Omit<DiscoveredFile, "source">;
+
+export interface ListResult {
+  files: ListedFile[];
+  i18nFileDiscovery: FileDiscoveryStats | null;
+}
+
+export async function listCodebase(rootPath: string): Promise<ListResult> {
   const resolved = path.resolve(rootPath);
 
   const globby = await loadGlobby();
@@ -111,8 +119,7 @@ export async function walkCodebase(rootPath: string): Promise<WalkResult> {
     runI18nFileDiscovery(resolved),
   ]);
 
-  const files: DiscoveredFile[] = [];
-  let filesSkippedMinified = 0;
+  const files: ListedFile[] = [];
 
   for (const absPath of paths) {
     const ext = path.extname(absPath).toLowerCase();
@@ -137,32 +144,49 @@ export async function walkCodebase(rootPath: string): Promise<WalkResult> {
       localeKey = platformLocaleForPath(language.id, relPath);
     }
 
-    let source: string;
-    try {
-      source = await fs.readFile(absPath, "utf8");
-    } catch {
+    files.push({ absPath, relPath, language, languageLabel: language.id, localeKey });
+  }
+
+  return { files, i18nFileDiscovery: i18nFileResult?.stats ?? null };
+}
+
+// Some formats get slower faster than they grow (the `yaml` parser is quadratic), so big files are skipped.
+export const MAX_FILE_BYTES = 1024 * 1024;
+
+export async function readListedFile(
+  file: ListedFile
+): Promise<string | "unreadable" | "too-large" | "minified"> {
+  let source: string;
+  try {
+    if ((await fs.stat(file.absPath)).size > MAX_FILE_BYTES) return "too-large";
+    source = await fs.readFile(file.absPath, "utf8");
+  } catch {
+    return "unreadable";
+  }
+  return looksMinified(source) ? "minified" : source;
+}
+
+export async function walkCodebase(rootPath: string): Promise<WalkResult> {
+  const { files: listed, i18nFileDiscovery } = await listCodebase(rootPath);
+  const files: DiscoveredFile[] = [];
+  let filesSkippedMinified = 0;
+  let filesSkippedTooLarge = 0;
+
+  for (const file of listed) {
+    const source = await readListedFile(file);
+    if (source === "unreadable") continue;
+    if (source === "too-large") {
+      filesSkippedTooLarge++;
       continue;
     }
-    if (looksMinified(source)) {
+    if (source === "minified") {
       filesSkippedMinified++;
       continue;
     }
-
-    files.push({
-      absPath,
-      relPath,
-      language,
-      source,
-      languageLabel: language.id,
-      localeKey,
-    });
+    files.push({ ...file, source });
   }
 
-  return {
-    files,
-    filesSkippedMinified,
-    i18nFileDiscovery: i18nFileResult?.stats ?? null,
-  };
+  return { files, filesSkippedMinified, filesSkippedTooLarge, i18nFileDiscovery };
 }
 
 async function runI18nFileDiscovery(
