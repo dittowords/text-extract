@@ -6,6 +6,7 @@ import { createHash } from "crypto";
 import type { FileDiscoveryStats } from "./lang/file-discovery";
 import type { Language } from "./lang/registry";
 import type { ExtractedHit } from "./lang/types";
+import { takeStoppedEarlyLines } from "./lang/extractors/grammar";
 import { computeLineOffsets } from "./lang/extractors/util";
 import {
   DittoScanDetectionKindSchema,
@@ -46,6 +47,9 @@ export interface DittoScanExtractSummary {
   // means strings are missing from a scan that otherwise looks clean.
   filesFailed: number;
   failures: DittoScanExtractFailure[];
+  // Lines over `LINE_TIME_LIMIT_MS` or `MAX_LINE_LENGTH` in the grammar pass. Skipped.
+  linesStoppedEarly: number;
+  stoppedEarlyLines: { file: string; line: number }[];
 }
 
 const CONTEXT_LINES = 3;
@@ -367,6 +371,8 @@ export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoSc
   const candidates: DittoScanCandidate[] = [];
   const failures: DittoScanExtractFailure[] = [];
   let filesFailed = 0;
+  let linesStoppedEarly = 0;
+  const stoppedEarlyLines: { file: string; line: number }[] = [];
 
   for (const file of files) {
     const source = await readListedFile(file);
@@ -409,6 +415,10 @@ export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoSc
       candidates.push(candidate);
       candidatesByKind[candidate.detection_kind]++;
     }
+    for (const line of takeStoppedEarlyLines()) {
+      linesStoppedEarly++;
+      if (stoppedEarlyLines.length < MAX_REPORTED_FAILURES) stoppedEarlyLines.push({ file: file.relPath, line });
+    }
   }
 
   return {
@@ -425,6 +435,8 @@ export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoSc
       i18nFileDiscovery,
       filesFailed,
       failures,
+      linesStoppedEarly,
+      stoppedEarlyLines,
     },
   };
 }

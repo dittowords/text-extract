@@ -182,7 +182,37 @@ function stripDelimiters(raw: string): string {
   return raw.slice(start + n, raw.length - n);
 }
 
-export async function extractWithGrammar(source: string, lang: string): Promise<ExtractedHit[]> {
+// The time limit for the grammar pass of one line, in milliseconds. A line that is over
+// the limit is not tokenized.
+// - A normal line is tokenized in microseconds.
+// - A line that takes seconds is most likely a bundle, a data blob, or a regex backtrack.
+// - The tokenizer is synchronous, so the event loop is blocked for the full time.
+export const LINE_TIME_LIMIT_MS = 1000;
+
+// Tokenizing is skipped for a line over this length.
+// A line this long is most likely a bundle, a data blob, or an inline asset
+export const MAX_LINE_LENGTH = 4000;
+
+// The tokenizer loop gives the event loop a turn after this much continuous work, so timers
+// and I/O callbacks run inside a large file and not only between files.
+const YIELD_EVERY_MS = 50;
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+// The 1-based line numbers that were over the time limit in the last `extractWithGrammar`
+// call. `runExtract` reads and clears the list after each file.
+let stoppedEarlyLines: number[] = [];
+export function takeStoppedEarlyLines(): number[] {
+  const lines = stoppedEarlyLines;
+  stoppedEarlyLines = [];
+  return lines;
+}
+
+export async function extractWithGrammar(
+  source: string,
+  lang: string,
+  opts: { lineTimeLimitMs?: number } = {}
+): Promise<ExtractedHit[]> {
+  const lineTimeLimitMs = opts.lineTimeLimitMs ?? LINE_TIME_LIMIT_MS;
   const name = grammarFor(lang, source);
   const grammar = await loadGrammar(name);
   const markup = isMarkupGrammar(name);
@@ -287,10 +317,25 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
     append(run!, tok);
   };
 
+  let lastYield = Date.now();
   for (let li = 0; li < lines.length; li++) {
+    if (Date.now() - lastYield > YIELD_EVERY_MS) {
+      await yieldToEventLoop();
+      lastYield = Date.now();
+    }
     const line = lines[li];
-    const res = grammar.tokenizeLine(line, stack);
+    if (line.length > MAX_LINE_LENGTH) {
+      stoppedEarlyLines.push(li + 1);
+      abortHole();
+      continue;
+    }
+    const res = grammar.tokenizeLine(line, stack, lineTimeLimitMs);
     stack = res.ruleStack;
+    if (res.stoppedEarly) {
+      stoppedEarlyLines.push(li + 1);
+      abortHole();
+      continue;
+    }
     pendingNewline = li > 0;
     lineHasText = false;
     // A text run with no text yet ends at a line break.
