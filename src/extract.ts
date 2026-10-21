@@ -6,7 +6,6 @@ import { createHash } from "crypto";
 import type { FileDiscoveryStats } from "./lang/file-discovery";
 import type { Language } from "./lang/registry";
 import type { ExtractedHit } from "./lang/types";
-import { takeStoppedEarlyLines } from "./lang/extractors/grammar";
 import { computeLineOffsets } from "./lang/extractors/util";
 import {
   DittoScanDetectionKindSchema,
@@ -316,11 +315,13 @@ export async function extractFromResolvedFile(args: {
   languageLabel: string;
   localeKey: string | null;
   framework: string[];
+  onSkippedLine?: (line: number) => void;
 }): Promise<DittoScanCandidate[]> {
-  const { relPath, source, language, languageLabel, localeKey, framework } = args;
+  const { relPath, source, language, languageLabel, localeKey, framework, onSkippedLine } = args;
   const hits = await language.extractor.extract({
     source,
     kind: language.id,
+    onSkippedLine,
   });
 
   const lines = source.split(/\r?\n/);
@@ -396,6 +397,10 @@ export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoSc
         languageLabel: file.languageLabel,
         localeKey: file.localeKey,
         framework,
+        onSkippedLine: (line) => {
+          linesStoppedEarly++;
+          if (stoppedEarlyLines.length < MAX_REPORTED_FAILURES) stoppedEarlyLines.push({ file: file.relPath, line });
+        },
       });
     } catch (e) {
       // Returned in the summary rather than written to stderr, so callers can
@@ -414,10 +419,6 @@ export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoSc
     for (const candidate of fileCandidates) {
       candidates.push(candidate);
       candidatesByKind[candidate.detection_kind]++;
-    }
-    for (const line of takeStoppedEarlyLines()) {
-      linesStoppedEarly++;
-      if (stoppedEarlyLines.length < MAX_REPORTED_FAILURES) stoppedEarlyLines.push({ file: file.relPath, line });
     }
   }
 

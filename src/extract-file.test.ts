@@ -106,6 +106,7 @@ describe("extractFile", () => {
     expect(await extractFile({ relPath: "a.bin", source: "hello" })).toEqual({
       candidates: [],
       skipped: "unsupported_language",
+      stoppedEarlyLines: [],
     });
     // Mean line length over the threshold reads as a bundle.
     const minified = "a".repeat(2048);

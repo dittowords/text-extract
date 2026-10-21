@@ -24,5 +24,5 @@ it("skips a file over the size cap in runExtract and still scans the rest", asyn
 
 it("skips a source over the size cap in extractFile", async () => {
   const result = await extractFile({ relPath: "huge.tsx", source: oversized });
-  expect(result).toEqual({ candidates: [], skipped: "too_large" });
+  expect(result).toEqual({ candidates: [], skipped: "too_large", stoppedEarlyLines: [] });
 });
