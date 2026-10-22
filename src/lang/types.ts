@@ -21,6 +21,8 @@ export interface ExtractedHit {
 
 // One per file format. Source code goes through the grammar extractor.
 // Each localization resource format has its own.
+//
+// onSkippedLine currently only used by grammar extractor
 export interface LanguageExtractor {
-  extract(opts: { source: string; kind: string }): Promise<ExtractedHit[]>;
+  extract(opts: { source: string; kind: string; onSkippedLine?: (line: number) => void }): Promise<ExtractedHit[]>;
 }

@@ -46,6 +46,9 @@ export interface DittoScanExtractSummary {
   // means strings are missing from a scan that otherwise looks clean.
   filesFailed: number;
   failures: DittoScanExtractFailure[];
+  // Lines over `LINE_TIME_LIMIT_MS` or `MAX_LINE_LENGTH` in the grammar pass. Skipped.
+  linesStoppedEarly: number;
+  stoppedEarlyLines: { file: string; line: number }[];
 }
 
 const CONTEXT_LINES = 3;
@@ -312,11 +315,13 @@ export async function extractFromResolvedFile(args: {
   languageLabel: string;
   localeKey: string | null;
   framework: string[];
+  onSkippedLine?: (line: number) => void;
 }): Promise<DittoScanCandidate[]> {
-  const { relPath, source, language, languageLabel, localeKey, framework } = args;
+  const { relPath, source, language, languageLabel, localeKey, framework, onSkippedLine } = args;
   const hits = await language.extractor.extract({
     source,
     kind: language.id,
+    onSkippedLine,
   });
 
   const lines = source.split(/\r?\n/);
@@ -367,6 +372,8 @@ export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoSc
   const candidates: DittoScanCandidate[] = [];
   const failures: DittoScanExtractFailure[] = [];
   let filesFailed = 0;
+  let linesStoppedEarly = 0;
+  const stoppedEarlyLines: { file: string; line: number }[] = [];
 
   for (const file of files) {
     const source = await readListedFile(file);
@@ -390,6 +397,10 @@ export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoSc
         languageLabel: file.languageLabel,
         localeKey: file.localeKey,
         framework,
+        onSkippedLine: (line) => {
+          linesStoppedEarly++;
+          if (stoppedEarlyLines.length < MAX_REPORTED_FAILURES) stoppedEarlyLines.push({ file: file.relPath, line });
+        },
       });
     } catch (e) {
       // Returned in the summary rather than written to stderr, so callers can
@@ -425,6 +436,8 @@ export async function runExtract(opts: DittoScanExtractOptions): Promise<DittoSc
       i18nFileDiscovery,
       filesFailed,
       failures,
+      linesStoppedEarly,
+      stoppedEarlyLines,
     },
   };
 }

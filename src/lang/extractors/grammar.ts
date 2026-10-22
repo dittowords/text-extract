@@ -158,6 +158,45 @@ const holeBalance = (text: string) => (text.match(/\{|<[%?]/g)?.length ?? 0) - (
 const holeDelta = (prev: string, text: string) => holeBalance(prev + text) - holeBalance(prev);
 
 // ---------------------------------------------------------------------------
+// Handling long lines (when a line over `MAX_LINE_LENGTH` or over `LINE_TIME_LIMIT_MS` is
+// skipped):
+//   - the tokens of the line are not used, so the line has no hits
+//   - the line number is passed to `onSkippedLine`
+//   - for a line over `MAX_LINE_LENGTH`, the state after the line is the end
+//     state of the shortened line from `shortenInertRuns`
+//   - when that state is not known, the state from before the line is kept.
+//     This is how VS Code handles the same issue.
+//     The state is wrong when the line ends a comment or string.
+// ---------------------------------------------------------------------------
+
+// The time limit for the grammar pass of one line, in milliseconds.
+// - A "normal" line is tokenized in microseconds.
+// - The tokenizer is synchronous, so the event loop is blocked for the full time.
+// - The limit is checked only between two regex matches. One regex search can take
+//   longer than the limit.
+export const LINE_TIME_LIMIT_MS = 1000;
+
+// The maximum line length for the grammar pass.
+// - In some grammars, the tokenize time increases as the square of the line length.
+// - Still needed for cases where a regex search when tokenizing takes longer than the time limit.
+export const MAX_LINE_LENGTH = 4000;
+
+// A run of these characters cannot form a delimiter. `--` starts a comment in SQL, Lua,
+// and Haskell, so `--` is not part of a run.
+const INERT_RUN = /(?:[A-Za-z0-9 .,]|-(?!-))+/g;
+// A run is cut only when it is longer than this.
+// - In a string or a comment, a cut has no effect on the state.
+// - In code, a run can contain a keyword such as `interface`, and the cut can change
+//   the state. A run of words in code is almost never this long.
+const MIN_CUT_RUN = 256;
+// The short form of a line has the same delimiters in the same order, so the end state
+// of the short form is the end state of the line.
+// - Each long run keeps its first and last 8 characters.
+// - The space between the two parts prevents a new `--`.
+const shortenInertRuns = (line: string) =>
+  line.replace(INERT_RUN, (r) => (r.length > MIN_CUT_RUN ? `${r.slice(0, 8)} ${r.slice(-8)}` : r));
+
+// ---------------------------------------------------------------------------
 // Tokenizer walk
 // ---------------------------------------------------------------------------
 
@@ -182,7 +221,17 @@ function stripDelimiters(raw: string): string {
   return raw.slice(start + n, raw.length - n);
 }
 
-export async function extractWithGrammar(source: string, lang: string): Promise<ExtractedHit[]> {
+// The tokenizer loop gives the event loop a turn after this much continuous work, so timers
+// and I/O callbacks run inside a large file and not only between files.
+const YIELD_EVERY_MS = 50;
+const yieldToEventLoop = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+export async function extractWithGrammar(
+  source: string,
+  lang: string,
+  opts: { lineTimeLimitMs?: number; onSkippedLine?: (line: number) => void } = {}
+): Promise<ExtractedHit[]> {
+  const lineTimeLimitMs = opts.lineTimeLimitMs ?? LINE_TIME_LIMIT_MS;
   const name = grammarFor(lang, source);
   const grammar = await loadGrammar(name);
   const markup = isMarkupGrammar(name);
@@ -286,10 +335,34 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
     }
     append(run!, tok);
   };
+ 
+  const skipLine = (li: number) => {
+    opts.onSkippedLine?.(li + 1);
+    abortHole();
+    inTag = false;
+    if (lines[li].length <= MAX_LINE_LENGTH) return;
+    const short = shortenInertRuns(lines[li]);
+    if (short.length > MAX_LINE_LENGTH) return;
+    const res = grammar.tokenizeLine(short, stack, lineTimeLimitMs);
+    if (!res.stoppedEarly) stack = res.ruleStack;
+  };
 
+  let lastYield = Date.now();
   for (let li = 0; li < lines.length; li++) {
+    if (Date.now() - lastYield > YIELD_EVERY_MS) {
+      await yieldToEventLoop();
+      lastYield = Date.now();
+    }
     const line = lines[li];
-    const res = grammar.tokenizeLine(line, stack);
+    if (line.length > MAX_LINE_LENGTH) {
+      skipLine(li);
+      continue;
+    }
+    const res = grammar.tokenizeLine(line, stack, lineTimeLimitMs);
+    if (res.stoppedEarly) {
+      skipLine(li);
+      continue;
+    }
     stack = res.ruleStack;
     pendingNewline = li > 0;
     lineHasText = false;
@@ -392,5 +465,5 @@ export async function extractWithGrammar(source: string, lang: string): Promise<
  * language.
  */
 export const grammarExtractor: LanguageExtractor = {
-  extract: ({ source, kind }) => extractWithGrammar(source, kind),
+  extract: ({ source, kind, onSkippedLine }) => extractWithGrammar(source, kind, { onSkippedLine }),
 };

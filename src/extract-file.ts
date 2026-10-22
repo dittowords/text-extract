@@ -42,6 +42,8 @@ export interface ExtractFileResult {
   candidates: DittoScanCandidate[];
   /** Set when the file was not scanned at all. */
   skipped: SkipReason | null;
+  /** The lines over `LINE_TIME_LIMIT_MS` or `MAX_LINE_LENGTH`. These lines were not tokenized. */
+  stoppedEarlyLines: number[];
 }
 
 /**
@@ -101,9 +103,10 @@ export async function extractFile(
 ): Promise<ExtractFileResult> {
   const resolved = resolveFile(opts.relPath, opts.source);
   if (typeof resolved === "string") {
-    return { candidates: [], skipped: resolved };
+    return { candidates: [], skipped: resolved, stoppedEarlyLines: [] };
   }
 
+  const stoppedEarlyLines: number[] = [];
   const candidates = await extractFromResolvedFile({
     relPath: opts.relPath,
     source: opts.source,
@@ -111,7 +114,8 @@ export async function extractFile(
     languageLabel: resolved.languageLabel,
     localeKey: resolved.localeKey,
     framework: opts.framework ?? [],
+    onSkippedLine: (line) => stoppedEarlyLines.push(line),
   });
 
-  return { candidates, skipped: null };
+  return { candidates, skipped: null, stoppedEarlyLines };
 }

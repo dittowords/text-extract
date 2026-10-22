@@ -42,6 +42,11 @@ Both entry points reach the same verdict on the same file.
   order varies. The set is stable; compare accordingly.
 - `summary.filesFailed` counts files an extractor threw on. They're dropped from
   the results, so a non-zero count means strings are missing.
+- `summary.linesStoppedEarly` counts lines that were skipped because they are
+  longer than `MAX_LINE_LENGTH` or slower than `LINE_TIME_LIMIT_MS` to tokenize.
+  A skipped line has no candidates. `summary.stoppedEarlyLines` lists up to 20
+  skipped lines with their files. `extractFile` returns all skipped lines of its
+  file in `stoppedEarlyLines`.
 
 ## Development
 
@@ -58,3 +63,4 @@ yarn build
 | `extract-file.test.ts` | That the two entry points agree per file. |
 | `extract-failures.test.ts` | That a throwing extractor is counted, not swallowed. |
 | `extract-performance.test.ts` | That the grammar extractor doesn't backtrack catastrophically on dense input. |
+| `line-time-limit.test.ts` | That long or slow lines are skipped and reported per file, and that the state after a skipped line is correct. |
